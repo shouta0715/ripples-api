@@ -92,10 +92,11 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     const isOdd = order % 2 !== 0;
 
     if (isOdd) {
+      const prevOddUser = sortedUsers.find((user) => user.order - 1 === order);
       const { endHeight } = prevUser.assignPosition;
 
       const startHeight = endHeight;
-      const startWidth = 0;
+      const startWidth = prevOddUser ? prevOddUser.assignPosition.endWidth : 0;
 
       assignPosition.startHeight = startHeight;
       assignPosition.startWidth = startWidth;
@@ -103,9 +104,13 @@ export class WebMultiViewSession extends DurableObject<Sync> {
       assignPosition.endHeight = startHeight + height;
       assignPosition.endWidth = startWidth + width;
     } else {
+      const prevEvenUser = sortedUsers.find((user) => user.order === order - 2);
+
       const { endWidth } = prevUser.assignPosition;
 
-      const startHeight = 0;
+      const startHeight = prevEvenUser
+        ? prevEvenUser.assignPosition.endHeight
+        : 0;
       const startWidth = endWidth;
 
       assignPosition.startHeight = startHeight;
