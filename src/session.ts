@@ -139,6 +139,9 @@ export class WebMultiViewSession extends DurableObject<Sync> {
 
     const sockets = this.ctx.getWebSockets();
 
+    const target = this.users.get(data.senderId);
+    if (!target) return;
+
     for (const socket of sockets) {
       const tag = this.ctx.getTags(socket);
       if (!tag) continue;
@@ -148,8 +151,10 @@ export class WebMultiViewSession extends DurableObject<Sync> {
 
       const { x, y } = data;
 
-      const newX = x - me.assignPosition.startWidth;
-      const newY = y - me.assignPosition.startHeight;
+      const newX =
+        x - me.assignPosition.startWidth + target.assignPosition.startWidth;
+      const newY =
+        y - me.assignPosition.startHeight + target.assignPosition.startHeight;
       socket.send(
         JSON.stringify({ x: newX, y: newY, senderId: data.senderId })
       );
