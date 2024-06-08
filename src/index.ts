@@ -11,7 +11,9 @@ const sessionMiddleware = createMiddleware<SyncEnv>(async (c, next) => {
     return next();
   }
 
-  const session = c.env.SESSION.idFromName("session");
+  const appName = c.req.param("app-name");
+
+  const session = c.env.SESSION.idFromName(appName);
 
   const stub = c.env.SESSION.get(session);
 
@@ -20,7 +22,17 @@ const sessionMiddleware = createMiddleware<SyncEnv>(async (c, next) => {
   return next();
 });
 
-app.get("/", sessionMiddleware, async (c) => {
+app.post("/:app-name/register", async (c) => {
+  const id = crypto.randomUUID();
+
+  return c.json({ id });
+});
+
+app.get("/:app-name/:id", sessionMiddleware, async (c) => {
+  return c.var.session.fetch(c.req.raw);
+});
+
+app.get("/:app-name/:id/admin", sessionMiddleware, async (c) => {
   return c.var.session.fetch(c.req.raw);
 });
 
