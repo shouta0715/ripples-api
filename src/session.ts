@@ -1,6 +1,8 @@
 /* eslint-disable class-methods-use-this */
+import { DurableObjectStorage } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
 import { WebMultiViewSync } from "@/sync";
+import { checkUUID } from "@/utils";
 
 type Sync = { SYNC: DurableObjectNamespace<WebMultiViewSync> };
 
@@ -11,122 +13,61 @@ type AssignedPosition = {
   endHeight: number;
 };
 
-type State = {
+type AdminState = {
+  role: "admin";
+  id: string;
+};
+
+type UserState = {
+  role: "user";
   width: number;
   height: number;
-  id: string;
-  order: number;
   assignPosition: AssignedPosition;
+  id: string;
 };
+
+type State = AdminState | UserState;
 
 type Data = {
   x: number;
   y: number;
-  senderId: string;
 };
 
 export class WebMultiViewSession extends DurableObject<Sync> {
   users = new Map<string, State>();
 
+  sessions = new Map<WebSocket, State>();
+
+  state: DurableObjectState;
+
+  storage: DurableObjectStorage;
+
+  env: Sync;
+
+  timestamp = 0;
+
+  constructor(state: DurableObjectState, env: Sync) {
+    console.log("Session created");
+    super(state, env);
+
+    this.state = state;
+    this.storage = state.storage;
+    this.env = env;
+
+    this.sessions = new Map();
+
+    this.state.getWebSockets().forEach((ws) => {
+      const meta = ws.deserializeAttachment();
+
+      this.sessions.set(ws, { ...meta });
+    });
+  }
+
   async fetch(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-
-    const id = url.searchParams.get("id");
-
-    if (!id) return new Response("Not Found", { status: 404 });
-
-    const has = this.users.has(id);
-
-    if (has) return new Response("Already Exists", { status: 400 });
-
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
 
-    const width = Number(url.searchParams.get("width"));
-    const height = Number(url.searchParams.get("height"));
-
-    if (!width || !height) {
-      return new Response("Invalid Request", { status: 400 });
-    }
-
-    const clientsLength = this.users.size;
-
-    const isFirst = clientsLength === 0;
-
-    const order = isFirst ? 1 : clientsLength + 1;
-
-    const commonData = {
-      id,
-      width,
-      height,
-      order,
-    };
-
-    const allUsers = Array.from(this.users.values());
-
-    const sortedUsers = allUsers.sort((a, b) => a.order - b.order);
-
-    const prevUser = isFirst ? undefined : sortedUsers[clientsLength - 1];
-
-    const assignPosition: AssignedPosition = {
-      startWidth: 0,
-      startHeight: 0,
-      endWidth: width,
-      endHeight: height,
-    };
-
-    if (isFirst || !prevUser) {
-      const state: State = {
-        ...commonData,
-        assignPosition,
-      };
-      this.users.set(id, state);
-      this.ctx.acceptWebSocket(server, [id]);
-
-      return new Response(null, {
-        status: 101,
-        webSocket: client,
-      });
-    }
-
-    const isOdd = order % 2 !== 0;
-
-    if (isOdd) {
-      const prevOddUser = sortedUsers.find((user) => user.order - 1 === order);
-      const { endHeight } = prevUser.assignPosition;
-
-      const startHeight = endHeight;
-      const startWidth = prevOddUser ? prevOddUser.assignPosition.endWidth : 0;
-
-      assignPosition.startHeight = startHeight;
-      assignPosition.startWidth = startWidth;
-
-      assignPosition.endHeight = startHeight + height;
-      assignPosition.endWidth = startWidth + width;
-    } else {
-      const prevEvenUser = sortedUsers.find((user) => user.order === order - 2);
-
-      const { endWidth } = prevUser.assignPosition;
-
-      const startHeight = prevEvenUser
-        ? prevEvenUser.assignPosition.endHeight
-        : 0;
-      const startWidth = endWidth;
-
-      assignPosition.startHeight = startHeight;
-      assignPosition.startWidth = startWidth;
-
-      assignPosition.endHeight = startHeight + height;
-      assignPosition.endWidth = startWidth + width;
-    }
-
-    const state: State = {
-      ...commonData,
-      assignPosition,
-    };
-
-    this.users.set(id, state);
-    this.ctx.acceptWebSocket(server, [id]);
+    await this.handleSession(server, new URL(req.url));
 
     return new Response(null, {
       status: 101,
@@ -135,45 +76,135 @@ export class WebMultiViewSession extends DurableObject<Sync> {
   }
 
   async webSocketMessage(ws: WebSocket, m: ArrayBuffer | string) {
+    const session = this.sessions.get(ws);
+
+    if (!session) return;
+
+    const isAdmin = session.role === "admin";
     const data = JSON.parse(m.toString()) as Data;
+
+    if (isAdmin) {
+      this.broadcastAdmin(ws, data, session.id);
+    }
+
+    this.broadcastUser(ws, data);
+  }
+
+  async broadcastAdmin(ws: WebSocket, data: Data, senderId: string) {
+    ws.send(JSON.stringify({ ...data, id: senderId }));
+  }
+
+  async broadcastUser(ws: WebSocket, data: Data) {
+    const sender = this.sessions.get(ws);
+    if (!sender) return;
+
+    if (sender.role === "admin") return;
 
     const sockets = this.ctx.getWebSockets();
 
-    const target = this.users.get(data.senderId);
-    if (!target) return;
-
     for (const socket of sockets) {
-      const tag = this.ctx.getTags(socket);
-      if (!tag) continue;
-      const me = this.users.get(tag[0]);
+      const me = this.sessions.get(socket);
       if (!me) continue;
-      if (socket === ws) continue;
+      const isAdmin = me.role === "admin";
+
+      if (isAdmin) {
+        this.broadcastAdmin(socket, data, sender.id);
+        continue;
+      }
 
       const { x, y } = data;
 
       const newX =
-        x - me.assignPosition.startWidth + target.assignPosition.startWidth;
+        x - me.assignPosition.startWidth + me.assignPosition.startWidth;
       const newY =
-        y - me.assignPosition.startHeight + target.assignPosition.startHeight;
-      socket.send(
-        JSON.stringify({ x: newX, y: newY, senderId: data.senderId })
-      );
+        y - me.assignPosition.startHeight + me.assignPosition.startHeight;
+
+      socket.send(JSON.stringify({ x: newX, y: newY, id: me.id }));
     }
   }
 
-  async webSocketClose(ws: WebSocket, code: number) {
-    const tag = this.ctx.getTags(ws);
+  async handleSession(ws: WebSocket, url: URL) {
+    const lastPath = url.pathname.split("/").pop();
 
-    if (!tag) {
-      ws.close(code, "Durable Object is closing WebSocket");
+    let state: State;
 
-      return;
+    if (lastPath === "admin") {
+      state = this.handleAdmin();
+    } else {
+      state = this.handleUser(url);
     }
 
-    const id = tag[0];
+    this.state.acceptWebSocket(ws, [state.role]);
 
-    this.users.delete(id);
+    ws.serializeAttachment({ ...ws.deserializeAttachment(), ...state });
 
-    ws.close(code, "Durable Object is closing WebSocket");
+    this.sessions.set(ws, state);
+  }
+
+  handleAdmin(): AdminState {
+    const id = crypto.randomUUID();
+
+    return { role: "admin", id };
+  }
+
+  handleUser(url: URL): UserState {
+    const id = url.pathname.split("/").pop();
+
+    if (checkUUID(id) === false || !id) {
+      throw new Error("Invalid UUID");
+    }
+
+    const width = url.searchParams.get("width");
+    const height = url.searchParams.get("height");
+
+    if (!width || !height) {
+      throw new Error("Invalid width or height");
+    }
+
+    const assignPosition = {
+      startWidth: 0,
+      startHeight: 0,
+      endWidth: parseInt(width, 10),
+      endHeight: parseInt(height, 10),
+    };
+
+    const state = {
+      role: "user" as const,
+      width: parseInt(width, 10),
+      height: parseInt(height, 10),
+      assignPosition,
+      id,
+    };
+
+    return state;
+  }
+
+  async closeOrErrorHandler(ws: WebSocket) {
+    const session = this.sessions.get(ws);
+
+    if (!session) return;
+
+    this.sessions.delete(ws);
+
+    const admin = this.ctx.getWebSockets("admin");
+
+    if (admin.length === 0) return;
+
+    admin.forEach((socket) => {
+      socket.send(
+        JSON.stringify({
+          id: session.id,
+          message: `User ${session.id} has left`,
+        })
+      );
+    });
+  }
+
+  async webSocketClose(ws: WebSocket) {
+    this.closeOrErrorHandler(ws);
+  }
+
+  async webSocketError(ws: WebSocket) {
+    this.closeOrErrorHandler(ws);
   }
 }
