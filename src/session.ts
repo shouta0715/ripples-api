@@ -47,7 +47,6 @@ export class WebMultiViewSession extends DurableObject<Sync> {
   timestamp = 0;
 
   constructor(state: DurableObjectState, env: Sync) {
-    console.log("Session created");
     super(state, env);
 
     this.state = state;
