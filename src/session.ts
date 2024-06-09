@@ -28,6 +28,10 @@ type UserState = {
 
 type State = AdminState | UserState;
 
+type AdminData = {
+  action: "interaction" | "join" | "leave";
+} & Partial<Data>;
+
 type Data = {
   x: number;
   y: number;
@@ -79,46 +83,49 @@ export class WebMultiViewSession extends DurableObject<Sync> {
 
     if (!session) return;
 
-    const isAdmin = session.role === "admin";
     const data = JSON.parse(m.toString()) as Data;
-
-    if (isAdmin) {
-      this.broadcastAdmin(ws, data, session.id);
-    }
 
     this.broadcastUser(ws, data);
   }
 
-  async broadcastAdmin(ws: WebSocket, data: Data, senderId: string) {
-    ws.send(JSON.stringify({ ...data, id: senderId }));
+  broadcastAdmin(
+    ws: WebSocket | WebSocket[],
+    data: AdminData,
+    senderId: string
+  ) {
+    const sendData = JSON.stringify({ ...data, id: senderId });
+
+    if (Array.isArray(ws)) {
+      ws.forEach((socket) => {
+        socket.send(sendData);
+      });
+    } else {
+      ws.send(sendData);
+    }
   }
 
   async broadcastUser(ws: WebSocket, data: Data) {
     const sender = this.sessions.get(ws);
-    if (!sender) return;
+    if (!sender || sender.role === "admin") return;
 
-    if (sender.role === "admin") return;
+    const sockets = this.getWebSocketsByRole("user");
+    const admin = this.getWebSocketsByRole("admin");
 
-    const sockets = this.ctx.getWebSockets();
+    this.broadcastAdmin(admin, { action: "interaction", ...data }, sender.id);
 
     for (const socket of sockets) {
       const me = this.sessions.get(socket);
-      if (!me) continue;
-      const isAdmin = me.role === "admin";
 
-      if (isAdmin) {
-        this.broadcastAdmin(socket, data, sender.id);
-        continue;
-      }
+      if (!me || me.role === "admin") continue;
 
       const { x, y } = data;
 
       const newX =
-        x - me.assignPosition.startWidth + me.assignPosition.startWidth;
+        x - me.assignPosition.startWidth + sender.assignPosition.startWidth;
       const newY =
-        y - me.assignPosition.startHeight + me.assignPosition.startHeight;
+        y - me.assignPosition.startHeight + sender.assignPosition.startHeight;
 
-      socket.send(JSON.stringify({ x: newX, y: newY, id: me.id }));
+      socket.send(JSON.stringify({ x: newX, y: newY, id: sender.id }));
     }
   }
 
@@ -133,11 +140,29 @@ export class WebMultiViewSession extends DurableObject<Sync> {
       state = this.handleUser(url);
     }
 
-    this.state.acceptWebSocket(ws, [state.role]);
+    this.state.acceptWebSocket(ws, [state.role, state.id]);
 
     ws.serializeAttachment({ ...ws.deserializeAttachment(), ...state });
 
     this.sessions.set(ws, state);
+
+    const admin = this.getWebSocketsByRole("admin");
+
+    if (lastPath === "admin" || admin.length === 0) return;
+
+    if (state.role === "admin") return;
+    const userState = state as UserState;
+    admin.forEach((socket) => {
+      socket.send(
+        JSON.stringify({
+          action: "join",
+          id: state.id,
+          width: userState.width,
+          height: userState.height,
+          assignPosition: userState.assignPosition,
+        })
+      );
+    });
   }
 
   handleAdmin(): AdminState {
@@ -193,7 +218,7 @@ export class WebMultiViewSession extends DurableObject<Sync> {
       socket.send(
         JSON.stringify({
           id: session.id,
-          message: `User ${session.id} has left`,
+          action: "leave",
         })
       );
     });
@@ -205,5 +230,49 @@ export class WebMultiViewSession extends DurableObject<Sync> {
 
   async webSocketError(ws: WebSocket) {
     this.closeOrErrorHandler(ws);
+  }
+
+  getWebSocketsByRole(role: "admin" | "user") {
+    return this.ctx.getWebSockets(role);
+  }
+
+  getUserSessions(): UserState[] {
+    const sessions = Array.from(this.sessions.values());
+
+    const users = sessions.filter(
+      (session) => session.role === "user"
+    ) as UserState[];
+
+    return users;
+  }
+
+  async changePosition(id: string, position: { x: number; y: number }) {
+    const sessions = this.ctx.getWebSockets(id);
+
+    if (sessions.length !== 1 || !sessions[0]) {
+      throw new Error("Invalid session");
+    }
+
+    const session = sessions[0];
+
+    const user = this.sessions.get(session);
+
+    if (!user || user.role !== "user") {
+      throw new Error("Invalid user");
+    }
+
+    const assignPosition: AssignedPosition = {
+      startWidth: position.x,
+      startHeight: position.y,
+      endWidth: position.x + user.width,
+      endHeight: position.y + user.height,
+    };
+
+    this.sessions.set(session, { ...user, assignPosition });
+
+    session.serializeAttachment({
+      ...session.deserializeAttachment(),
+      assignPosition,
+    });
   }
 }
