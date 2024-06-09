@@ -2,13 +2,24 @@ import { Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
-import { positionSchema } from "@/schema";
+import { positionSchema, windowSchema } from "@/schema";
 import { SyncEnv } from "@/types/env";
 
 const app = new Hono<SyncEnv>();
 
 app.use(
   "/:app-name/admin/:id/position",
+  cors({
+    origin: "*",
+    allowMethods: ["POST"],
+    exposeHeaders: ["Content-Length"],
+    allowHeaders: ["Content-Type"],
+    credentials: true,
+  })
+);
+
+app.use(
+  "/:app-name/:id/resize",
   cors({
     origin: "*",
     allowMethods: ["POST"],
@@ -51,6 +62,30 @@ app.post("/:app-name/register", async (c) => {
 app.get("/:app-name/:id", sessionMiddleware, async (c) => {
   return c.var.session.fetch(c.req.raw);
 });
+
+app.post(
+  "/:app-name/:id/resize",
+  validator("json", (v, c) => {
+    const parsed = windowSchema.safeParse(v);
+
+    if (!parsed.success) {
+      return c.text("Invalid!", 401);
+    }
+
+    return parsed.data;
+  }),
+  async (c) => {
+    const appName = c.req.param("app-name");
+    const stub = getSessionStub(c, appName);
+
+    const userId = c.req.param("id");
+
+    const window = c.req.valid("json");
+    await stub.resize(userId, window);
+
+    return c.json({ success: true });
+  }
+);
 
 app.get("/:app-name/admin", sessionMiddleware, async (c) => {
   return c.var.session.fetch(c.req.raw);

@@ -275,4 +275,53 @@ export class WebMultiViewSession extends DurableObject<Sync> {
       assignPosition,
     });
   }
+
+  resize(id: string, window: { width: number; height: number }) {
+    const sessions = this.ctx.getWebSockets(id);
+
+    if (sessions.length !== 1 || !sessions[0]) {
+      throw new Error("Invalid session");
+    }
+
+    const session = sessions[0];
+
+    const user = this.sessions.get(session);
+
+    if (!user || user.role !== "user") {
+      throw new Error("Invalid user");
+    }
+
+    const assignPosition: AssignedPosition = {
+      ...user.assignPosition,
+      endWidth: user.assignPosition.startWidth + window.width,
+      endHeight: user.assignPosition.startHeight + window.height,
+    };
+
+    this.sessions.set(session, {
+      ...user,
+      width: window.width,
+      height: window.height,
+      assignPosition,
+    });
+
+    session.serializeAttachment({
+      ...session.deserializeAttachment(),
+      width: window.width,
+      height: window.height,
+      assignPosition,
+    });
+
+    const admin = this.getWebSocketsByRole("admin");
+
+    admin.forEach((socket) => {
+      socket.send(
+        JSON.stringify({
+          id,
+          action: "resize",
+          width: window.width,
+          height: window.height,
+        })
+      );
+    });
+  }
 }
