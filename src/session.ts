@@ -38,8 +38,6 @@ type Data = {
 };
 
 export class WebMultiViewSession extends DurableObject<Sync> {
-  users = new Map<string, State>();
-
   sessions = new Map<WebSocket, State>();
 
   state: DurableObjectState;
@@ -113,10 +111,10 @@ export class WebMultiViewSession extends DurableObject<Sync> {
 
     this.broadcastAdmin(admin, { action: "interaction", ...data }, sender.id);
 
-    for (const socket of sockets) {
+    sockets.forEach((socket) => {
       const me = this.sessions.get(socket);
 
-      if (!me || me.role === "admin") continue;
+      if (!me || me.role === "admin") return;
 
       const { x, y } = data;
 
@@ -125,8 +123,8 @@ export class WebMultiViewSession extends DurableObject<Sync> {
       const newY =
         y - me.assignPosition.startHeight + sender.assignPosition.startHeight;
 
-      socket.send(JSON.stringify({ x: newX, y: newY, id: sender.id }));
-    }
+      socket.send(JSON.stringify({ x: newX, y: newY, senderId: sender.id }));
+    });
   }
 
   async handleSession(ws: WebSocket, url: URL) {
