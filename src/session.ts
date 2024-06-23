@@ -1,8 +1,9 @@
 /* eslint-disable class-methods-use-this */
 import { DurableObjectStorage } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
+import { DeviceData } from "@/schema";
 import { WebMultiViewSync } from "@/sync";
-import { checkUUID } from "@/utils";
+import { checkUUID, getRandomInitialPosition } from "@/utils";
 
 type Sync = { SYNC: DurableObjectNamespace<WebMultiViewSync> };
 
@@ -23,6 +24,7 @@ type UserState = {
   width: number;
   height: number;
   assignPosition: AssignedPosition;
+  displayname: string;
   id: string;
 };
 
@@ -76,6 +78,7 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     });
   }
 
+  // WebSocketを受け取った時の処理
   async webSocketMessage(ws: WebSocket, m: ArrayBuffer | string) {
     const session = this.sessions.get(ws);
 
@@ -86,6 +89,7 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     this.broadcastUser(ws, data);
   }
 
+  // 管理者にデータを送信する処理
   broadcastAdmin(
     ws: WebSocket | WebSocket[],
     data: AdminData,
@@ -102,6 +106,7 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     }
   }
 
+  // ユーザーにデータを送信する処理
   async broadcastUser(ws: WebSocket, data: Data) {
     const sender = this.sessions.get(ws);
     if (!sender || sender.role === "admin") return;
@@ -127,6 +132,7 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     });
   }
 
+  // 初めてセッションを確立する際の処理
   async handleSession(ws: WebSocket, url: URL) {
     const lastPath = url.pathname.split("/").pop();
 
@@ -158,17 +164,34 @@ export class WebMultiViewSession extends DurableObject<Sync> {
           width: userState.width,
           height: userState.height,
           assignPosition: userState.assignPosition,
+          displayname: userState.displayname,
         })
       );
     });
   }
 
+  // 管理者のセッションを作成する際の処理
   handleAdmin(): AdminState {
+    const allAdmins = this.getWebSocketsByRole("admin");
+
+    if (allAdmins.length > 0) {
+      const admin = allAdmins[0];
+
+      const meta = this.sessions.get(admin);
+
+      if (!meta) {
+        throw new Error("Invalid meta");
+      }
+
+      return { role: "admin", id: meta.id };
+    }
+
     const id = crypto.randomUUID();
 
     return { role: "admin", id };
   }
 
+  // ユーザーのセッションを作成する際の処理
   handleUser(url: URL): UserState {
     const id = url.pathname.split("/").pop();
 
@@ -183,9 +206,10 @@ export class WebMultiViewSession extends DurableObject<Sync> {
       throw new Error("Invalid width or height");
     }
 
+    const { x, y } = getRandomInitialPosition();
     const assignPosition = {
-      startWidth: 0,
-      startHeight: 0,
+      startWidth: x,
+      startHeight: y,
       endWidth: parseInt(width, 10),
       endHeight: parseInt(height, 10),
     };
@@ -196,11 +220,13 @@ export class WebMultiViewSession extends DurableObject<Sync> {
       height: parseInt(height, 10),
       assignPosition,
       id,
+      displayname: id,
     };
 
     return state;
   }
 
+  // WebSocketが閉じられた時の処理
   async closeOrErrorHandler(ws: WebSocket) {
     const session = this.sessions.get(ws);
 
@@ -230,10 +256,12 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     this.closeOrErrorHandler(ws);
   }
 
+  // roleを指定してWebSocketを取得する
   getWebSocketsByRole(role: "admin" | "user") {
     return this.ctx.getWebSockets(role);
   }
 
+  // 全ユーザーのセッションを取得する
   getUserSessions(): UserState[] {
     const sessions = Array.from(this.sessions.values());
 
@@ -244,6 +272,7 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     return users;
   }
 
+  // ユーザーの位置を変更するAPI
   async changePosition(id: string, position: { x: number; y: number }) {
     const sessions = this.ctx.getWebSockets(id);
 
@@ -272,9 +301,21 @@ export class WebMultiViewSession extends DurableObject<Sync> {
       ...session.deserializeAttachment(),
       assignPosition,
     });
+
+    const admin = this.getWebSocketsByRole("admin");
+
+    admin.forEach((socket) => {
+      socket.send(
+        JSON.stringify({
+          id,
+          action: "position",
+          assignPosition,
+        })
+      );
+    });
   }
 
-  resize(id: string, window: { width: number; height: number }) {
+  async resize(id: string, window: { width: number; height: number }) {
     const sessions = this.ctx.getWebSockets(id);
 
     if (sessions.length !== 1 || !sessions[0]) {
@@ -318,6 +359,113 @@ export class WebMultiViewSession extends DurableObject<Sync> {
           action: "resize",
           width: window.width,
           height: window.height,
+        })
+      );
+    });
+  }
+
+  getSession(id: string): WebSocket | null {
+    const sessions = this.ctx.getWebSockets(id);
+
+    if (sessions.length !== 1 || !sessions[0]) {
+      return null;
+    }
+
+    return sessions[0];
+  }
+
+  selectUser(id: string) {
+    const session = this.getSession(id);
+
+    if (!session) {
+      throw new Error("Invalid user");
+    }
+
+    session.send(
+      JSON.stringify({
+        action: "select",
+      })
+    );
+  }
+
+  changeDisplayName(id: string, displayname: string) {
+    const session = this.getSession(id);
+
+    if (!session) {
+      throw new Error("Invalid user");
+    }
+
+    const user = this.sessions.get(session);
+
+    if (!user || user.role !== "user") {
+      throw new Error("Invalid user");
+    }
+
+    this.sessions.set(session, { ...user, displayname });
+
+    session.serializeAttachment({
+      ...session.deserializeAttachment(),
+      displayname,
+    });
+
+    const admin = this.getWebSocketsByRole("admin");
+
+    admin.forEach((socket) => {
+      socket.send(
+        JSON.stringify({
+          id,
+          action: "displayname",
+          displayname,
+        })
+      );
+    });
+  }
+
+  changeDevice(id: string, device: DeviceData) {
+    const session = this.getSession(id);
+
+    if (!session) {
+      throw new Error("Invalid user");
+    }
+
+    const user = this.sessions.get(session);
+
+    if (!user || user.role !== "user") {
+      throw new Error("Invalid user");
+    }
+
+    const assignPosition: AssignedPosition = {
+      startWidth: device.x,
+      startHeight: device.y,
+      endWidth: device.x + user.width,
+      endHeight: device.y + user.height,
+    };
+
+    this.sessions.set(session, {
+      ...user,
+      assignPosition,
+      width: device.width,
+      height: device.height,
+    });
+
+    session.serializeAttachment({
+      ...session.deserializeAttachment(),
+      assignPosition,
+    });
+
+    const admin = this.getWebSocketsByRole("admin");
+
+    admin.forEach((socket) => {
+      socket.send(
+        JSON.stringify({
+          ...user,
+          assignPosition,
+          width: device.width,
+          height: device.height,
+          id,
+          action: "device",
+          x: device.x,
+          y: device.y,
         })
       );
     });

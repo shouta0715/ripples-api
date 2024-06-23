@@ -6,3 +6,10 @@ export function checkUUID(id: string | undefined): boolean {
 
   return uuidRegex.test(id);
 }
+
+export const getRandomInitialPosition = () => {
+  const x = Math.floor(Math.random() * 100);
+  const y = Math.floor(Math.random() * 100);
+
+  return { x, y };
+};

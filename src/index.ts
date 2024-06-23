@@ -2,13 +2,18 @@ import { Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { createMiddleware } from "hono/factory";
 import { validator } from "hono/validator";
-import { positionSchema, windowSchema } from "@/schema";
+import {
+  changeDeviceSchema,
+  displaynameSchema,
+  positionSchema,
+  windowSchema,
+} from "@/schema";
 import { SyncEnv } from "@/types/env";
 
 const app = new Hono<SyncEnv>();
 
 app.use(
-  "/:app-name/admin/:id/position",
+  "/:app-name/admin/:id/*",
   cors({
     origin: "*",
     allowMethods: ["POST"],
@@ -120,6 +125,54 @@ app.post(
 
     const position = c.req.valid("json");
     await stub.changePosition(userId, position);
+
+    return c.json({ success: true });
+  }
+);
+
+app.post(
+  "/:app-name/admin/:id/displayname",
+  validator("form", (v, c) => {
+    const parsed = displaynameSchema.safeParse(v);
+
+    if (!parsed.success) {
+      return c.text("Invalid!", 401);
+    }
+
+    return parsed.data;
+  }),
+  async (c) => {
+    const appName = c.req.param("app-name");
+    const stub = getSessionStub(c, appName);
+
+    const userId = c.req.param("id");
+
+    const { displayname } = c.req.valid("form");
+    await stub.changeDisplayName(userId, displayname);
+
+    return c.json({ success: true });
+  }
+);
+
+app.post(
+  "/:app-name/admin/:id/device",
+  validator("json", (v, c) => {
+    const parsed = changeDeviceSchema.safeParse(v);
+
+    if (!parsed.success) {
+      return c.text("Invalid!", 401);
+    }
+
+    return parsed.data;
+  }),
+  async (c) => {
+    const appName = c.req.param("app-name");
+    const stub = getSessionStub(c, appName);
+
+    const userId = c.req.param("id");
+
+    const device = c.req.valid("json");
+    await stub.changeDevice(userId, device);
 
     return c.json({ success: true });
   }
