@@ -5,6 +5,7 @@ import { validator } from "hono/validator";
 import {
   changeDeviceSchema,
   displaynameSchema,
+  modeSchema,
   positionSchema,
   windowSchema,
 } from "@/schema";
@@ -14,6 +15,17 @@ const app = new Hono<SyncEnv>();
 
 app.use(
   "/:app-name/admin/:id/*",
+  cors({
+    origin: "*",
+    allowMethods: ["POST"],
+    exposeHeaders: ["Content-Length"],
+    allowHeaders: ["Content-Type"],
+    credentials: true,
+  })
+);
+
+app.use(
+  "/:app-name/admin/mode",
   cors({
     origin: "*",
     allowMethods: ["POST"],
@@ -64,6 +76,16 @@ app.post("/:app-name/register", async (c) => {
   return c.json({ id });
 });
 
+app.get("/:app-name/mode", async (c) => {
+  const appName = c.req.param("app-name");
+
+  const stub = getSessionStub(c, appName);
+
+  const mode = await stub.getMode();
+
+  return c.json({ mode });
+});
+
 app.get("/:app-name/:id", sessionMiddleware, async (c) => {
   return c.var.session.fetch(c.req.raw);
 });
@@ -105,6 +127,29 @@ app.get("/:app-name/admin/sessions", async (c) => {
 
   return c.json(sessions);
 });
+
+app.post(
+  "/:app-name/admin/mode",
+  validator("json", (v, c) => {
+    const parsed = modeSchema.safeParse(v);
+
+    if (!parsed.success) {
+      return c.text("Invalid!", 401);
+    }
+
+    return parsed.data;
+  }),
+  async (c) => {
+    const { mode } = c.req.valid("json");
+
+    const appName = c.req.param("app-name");
+    const stub = getSessionStub(c, appName);
+
+    await stub.setMode(mode);
+
+    return c.json({ success: true });
+  }
+);
 
 app.post(
   "/:app-name/admin/:id/position",

@@ -21,4 +21,9 @@ export const changeDeviceSchema = z.object({
   height: z.number(),
 });
 
+export const modeSchema = z.object({
+  mode: z.union([z.literal("view"), z.literal("connect")]),
+});
+
 export type DeviceData = z.infer<typeof changeDeviceSchema>;
+export type Mode = z.infer<typeof modeSchema>["mode"];

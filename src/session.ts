@@ -1,7 +1,7 @@
 /* eslint-disable class-methods-use-this */
 import { DurableObjectStorage } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
-import { DeviceData } from "@/schema";
+import { DeviceData, Mode } from "@/schema";
 import { WebMultiViewSync } from "@/sync";
 import { checkUUID, getRandomInitialPosition } from "@/utils";
 
@@ -17,6 +17,7 @@ type AssignedPosition = {
 type AdminState = {
   role: "admin";
   id: string;
+  mode: Mode;
 };
 
 type UserState = {
@@ -139,7 +140,7 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     let state: State;
 
     if (lastPath === "admin") {
-      state = this.handleAdmin();
+      state = this.handleAdmin(url);
     } else {
       state = this.handleUser(url);
     }
@@ -171,24 +172,28 @@ export class WebMultiViewSession extends DurableObject<Sync> {
   }
 
   // 管理者のセッションを作成する際の処理
-  handleAdmin(): AdminState {
+  handleAdmin(url: URL): AdminState {
     const allAdmins = this.getWebSocketsByRole("admin");
 
     if (allAdmins.length > 0) {
       const admin = allAdmins[0];
 
-      const meta = this.sessions.get(admin);
+      const meta = this.sessions.get(admin) as AdminState;
 
       if (!meta) {
         throw new Error("Invalid meta");
       }
 
-      return { role: "admin", id: meta.id };
+      return { role: "admin", id: meta.id, mode: meta.mode };
     }
 
     const id = crypto.randomUUID();
 
-    return { role: "admin", id };
+    const searchParams = new URLSearchParams(url.search);
+
+    const mode = (searchParams.get("mode") || "view") as Mode;
+
+    return { role: "admin", id, mode };
   }
 
   // ユーザーのセッションを作成する際の処理
@@ -469,5 +474,56 @@ export class WebMultiViewSession extends DurableObject<Sync> {
         })
       );
     });
+  }
+
+  setMode(mode: Mode) {
+    const admins = this.getWebSocketsByRole("admin");
+
+    if (admins.length !== 1) {
+      throw new Error("Invalid admin");
+    }
+
+    const session = admins[0];
+    const meta = this.sessions.get(session);
+
+    if (!meta || meta.role !== "admin") {
+      throw new Error("Invalid admin");
+    }
+
+    this.sessions.set(session, { ...meta, mode });
+
+    session.serializeAttachment({
+      ...session.deserializeAttachment(),
+      mode,
+    });
+
+    const users = this.getWebSocketsByRole("user");
+
+    users.forEach((socket) => {
+      socket.send(
+        JSON.stringify({
+          action: "mode",
+          mode,
+        })
+      );
+    });
+  }
+
+  getMode(): Mode {
+    const admins = this.getWebSocketsByRole("admin");
+
+    if (admins.length !== 1) {
+      throw new Error("Invalid admin");
+    }
+
+    const session = admins[0];
+
+    const meta = this.sessions.get(session);
+
+    if (!meta || meta.role !== "admin") {
+      throw new Error("Invalid admin");
+    }
+
+    return meta.mode;
   }
 }
