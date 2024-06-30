@@ -38,16 +38,6 @@ app.get("/", sessionMiddleware, async (c) => {
   return c.var.session.fetch(c.req.raw);
 });
 
-app.get("/sessions", async (c) => {
-  const appName = c.req.param("app-name");
-
-  const stub = getSessionStub(c, appName);
-
-  const sessions = await stub.getUserSessions();
-
-  return c.json(sessions);
-});
-
 app.post("mode", zValidator("json", modeSchema), async (c) => {
   const { mode } = c.req.valid("json");
 
@@ -57,6 +47,15 @@ app.post("mode", zValidator("json", modeSchema), async (c) => {
   await stub.setMode(mode);
 
   return c.json({ success: true });
+});
+
+app.get("/sessions", async (c) => {
+  const appName = c.req.param("app-name");
+  const stub = getSessionStub(c, appName);
+
+  const sessions = await stub.getUserSessions();
+
+  return c.json(sessions);
 });
 
 app.post("/:id/position", zValidator("json", positionSchema), async (c) => {
