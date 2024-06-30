@@ -12,8 +12,10 @@ import { InteractionMessage, UserState } from "@/types/users";
 import { json, parse } from "@/utils";
 
 export class WebMultiViewSession extends DurableObject {
+  // 接続されているユーザーの情報を保持するMap
   users = new Map<WebSocket, UserState>();
 
+  // 管理者の情報を保持する
   admin: AdminSession | null;
 
   state: DurableObjectState;
@@ -41,6 +43,10 @@ export class WebMultiViewSession extends DurableObject {
     });
   }
 
+  /** ****************************
+    以下からは、組み込みAPIをoverrideして、WebSocketの接続を処理するためのメソッドです
+  ****************************** */
+
   async fetch(req: Request): Promise<Response> {
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
@@ -66,7 +72,19 @@ export class WebMultiViewSession extends DurableObject {
     this.broadcastUser(ws, data);
   }
 
-  async broadcastUser(ws: WebSocket, data: InteractionMessage) {
+  async webSocketClose(ws: WebSocket) {
+    this.closeOrErrorHandler(ws);
+  }
+
+  async webSocketError(ws: WebSocket) {
+    this.closeOrErrorHandler(ws);
+  }
+
+  /** ****************************
+    ここからは、WebSocketの接続を処理するためのメソッドです。外部からは呼び出されません
+  ****************************** */
+
+  private async broadcastUser(ws: WebSocket, data: InteractionMessage) {
     this.admin?.onAction({ data, action: "interaction" });
     const { users } = this;
 
@@ -82,7 +100,7 @@ export class WebMultiViewSession extends DurableObject {
     }
   }
 
-  async handleSession(ws: WebSocket, url: URL) {
+  private async handleSession(ws: WebSocket, url: URL) {
     const lastPath = url.pathname.split("/").pop();
 
     if (lastPath === "admin") {
@@ -102,7 +120,7 @@ export class WebMultiViewSession extends DurableObject {
     this.admin.onAction({ action: "join", user: user.getState(), ws });
   }
 
-  handleAdmin(ws: WebSocket): AdminState {
+  private handleAdmin(ws: WebSocket): AdminState {
     const admin = new AdminSession(ws, this.updatedAdminUsers, this.users);
 
     this.admin = admin;
@@ -110,7 +128,7 @@ export class WebMultiViewSession extends DurableObject {
     return admin.state;
   }
 
-  handleUser(ws: WebSocket, url: URL): UserSession {
+  private handleUser(ws: WebSocket, url: URL): UserSession {
     const user = new UserSession(ws, undefined, url, this.updatedUsers);
 
     return user;
@@ -124,26 +142,34 @@ export class WebMultiViewSession extends DurableObject {
     this.users.set(ws, state);
   }
 
-  async closeOrErrorHandler(ws: WebSocket) {
+  private getUserWsById(id: string): WebSocket {
+    const sessions = this.state.getWebSockets(id);
+
+    if (!sessions.length) throw new BadRequestError("Invalid user");
+    if (sessions.length > 1)
+      throw new InternalServerError("Multiple users found");
+
+    const [ws] = sessions;
+
+    return ws;
+  }
+
+  private async closeOrErrorHandler(ws: WebSocket) {
     this.admin?.onAction({ action: "leave", ws });
     ws.close();
   }
 
-  async webSocketClose(ws: WebSocket) {
-    this.closeOrErrorHandler(ws);
-  }
+  /** ****************************
+    ここからは、POSTでのリクエストを処理するためのメソッドです。
+    routerから呼び出されます。
+  ****************************** */
 
-  async webSocketError(ws: WebSocket) {
-    this.closeOrErrorHandler(ws);
-  }
-
-  // ユーザーの位置を変更するAPI
-  async changePosition(id: string, position: { x: number; y: number }) {
+  changePosition(id: string, position: { x: number; y: number }) {
     const ws = this.getUserWsById(id);
     this.admin?.onAction({ action: "position", ...position, id, ws });
   }
 
-  async resize(id: string, window: { width: number; height: number }) {
+  resize(id: string, window: { width: number; height: number }) {
     const session = this.ctx.getWebSockets(id)[0];
 
     const user = this.admin?.getUser(session);
@@ -188,17 +214,5 @@ export class WebMultiViewSession extends DurableObject {
     if (!this.admin) throw new InternalServerError("Admin is not connected");
 
     return this.admin.state.mode;
-  }
-
-  private getUserWsById(id: string): WebSocket {
-    const sessions = this.state.getWebSockets(id);
-
-    if (!sessions.length) throw new BadRequestError("Invalid user");
-    if (sessions.length > 1)
-      throw new InternalServerError("Multiple users found");
-
-    const [ws] = sessions;
-
-    return ws;
   }
 }
