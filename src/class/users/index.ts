@@ -99,7 +99,14 @@ export class UserSession
     const newX = x - assignPosition.startX + sender.assignPosition.startX;
     const newY = y - assignPosition.startY + sender.assignPosition.startY;
 
-    this.ws.send(json({ ...data, x: newX, y: newY, senderId: sender.id }));
+    this.ws.send(
+      json<InteractionMessage>({
+        ...data,
+        x: newX,
+        y: newY,
+        id: sender.id,
+      })
+    );
   }
 
   private actionResize(data: ResizeMessage): void {

@@ -21,6 +21,7 @@ export interface InteractionMessage extends BasicMessage<"interaction"> {
   sender: UserState;
   x: number;
   y: number;
+  id: string;
   [key: string]: unknown;
 }
 
