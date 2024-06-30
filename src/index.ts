@@ -9,6 +9,5 @@ const app = new Hono<SyncEnv>();
 app.route("/", admin);
 app.route("/", users);
 
-export { WebMultiViewSync } from "@/sync";
 export { WebMultiViewSession } from "@/session";
 export default app;
