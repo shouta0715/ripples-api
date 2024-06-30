@@ -19,19 +19,25 @@ export class UserSession
   extends BasicSession<UserState, UserActions, UserMessage>
   implements Session<UserState, UserActions, UserMessage>
 {
-  constructor(ws: WebSocket, url: URL) {
+  constructor(
+    ws: WebSocket,
+    initialState?: UserState,
+    url?: URL,
+    cb?: (ws: WebSocket, state: UserState) => void
+  ) {
     super(ws, "user");
-    this.state = this.onConnect(url);
+    this.state = initialState || this.onConnect(url);
     this.id = this.state.id;
+    if (cb) this.addListener(cb);
   }
 
-  onConnect(url: URL): UserState {
-    const id = url.pathname.split("/").pop();
+  onConnect(url?: URL): UserState {
+    const id = url?.pathname.split("/").pop();
 
     if (checkUUID(id) === false || !id) throw new BadRequestError("Invalid ID");
 
-    const width = url.searchParams.get("width");
-    const height = url.searchParams.get("height");
+    const width = url?.searchParams.get("width");
+    const height = url?.searchParams.get("height");
 
     if (!width || !height) throw new BadRequestError("Invalid size");
 

@@ -15,18 +15,17 @@ import {
   AdminDisplaynameMessage,
   AdminPositionMessage,
 } from "@/types/admin";
+import { UserState } from "@/types/users";
 import { json } from "@/utils";
 
 export class AdminSession
   extends BasicSession<AdminState, AdminActions, AdminMessage>
   implements Session<AdminState, AdminActions, AdminMessage>
 {
-  updatedUsersCb: (users: Map<WebSocket, UserSession>) => void;
-
   constructor(
     ws: WebSocket,
-    cb: (users: Map<WebSocket, UserSession>) => void,
-    initialUsers: Map<WebSocket, UserSession>
+    cb: (ws: WebSocket, state: AdminState) => void,
+    initialUsers: Map<WebSocket, UserState>
   ) {
     const initialState: AdminState = {
       role: "admin",
@@ -37,7 +36,7 @@ export class AdminSession
     super(ws, "admin", initialState);
     this.state = this.onConnect();
     this.id = this.state.id;
-    this.updatedUsersCb = cb;
+    this.addListener(cb);
   }
 
   onConnect(): AdminState {
@@ -81,10 +80,8 @@ export class AdminSession
     }
   }
 
-  updateUser(ws: WebSocket, user: UserSession) {
+  updateUser(ws: WebSocket, user: UserState) {
     this.state.users.set(ws, user);
-
-    this.updatedUsersCb(this.state.users);
   }
 
   private actionMode(data: AdminModeMessage): void {
@@ -97,7 +94,7 @@ export class AdminSession
     const { user, ws } = data;
 
     this.state.users.set(ws, user);
-    this.ws.send(json({ action: "join", ...user.getState() }));
+    this.ws.send(json({ action: "join", ...user }));
   }
 
   private actionLeave(data: AdminLeaveMessage) {
@@ -109,6 +106,8 @@ export class AdminSession
     this.state.users.delete(ws);
 
     this.ws.send(json({ action: "leave", id: target.id }));
+
+    this.saveState({ users: this.state.users });
   }
 
   private actionInteraction({ data }: AdminInteractionMessage) {
@@ -116,49 +115,47 @@ export class AdminSession
   }
 
   private actionDevice(data: AdminDeviceMessage) {
-    const { device, id } = data;
+    const { device, ws } = data;
 
-    const user = this.getUser(id);
+    const user = this.getUser(ws);
 
-    user.onAction({ action: "device", device });
+    user.onAction({ action: "device", device, ws });
 
-    this.updateUser(user.ws, user);
+    this.updateUser(user.ws, user.getState());
 
     this.ws.send(json({ action: "device", ...user.getState() }));
   }
 
   private actionDisplayname(data: AdminDisplaynameMessage) {
-    const { displayname, id } = data;
-    const user = this.getUser(id);
+    const { displayname, ws } = data;
+    const user = this.getUser(ws);
 
-    user.onAction({ action: "displayname", displayname });
+    user.onAction({ action: "displayname", displayname, ws });
 
-    this.updateUser(user.ws, user);
+    this.updateUser(user.ws, user.getState());
 
     this.ws.send(json({ action: "displayname", ...user.getState() }));
   }
 
   private actionPosition(data: AdminPositionMessage) {
-    const { x, y, id } = data;
+    const { x, y, ws } = data;
 
-    const user = this.getUser(id);
+    const user = this.getUser(ws);
 
-    user.onAction({ action: "position", x, y });
+    user.onAction({ action: "position", x, y, ws });
 
-    this.updateUser(user.ws, user);
+    this.updateUser(user.ws, user.getState());
 
     this.ws.send(json({ action: "position", ...user.getState() }));
   }
 
-  private getUser(id: string): UserSession {
-    const users = Array.from(this.state.users.values());
-
-    const user = users.find((u) => u.id === id);
+  getUser(ws: WebSocket): UserSession {
+    const user = this.state.users.get(ws);
 
     if (!user) {
       throw new BadRequestError("Invalid user");
     }
 
-    return user;
+    return new UserSession(ws, user, undefined, this.updateUser.bind(this));
   }
 }
