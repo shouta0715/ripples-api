@@ -1,7 +1,6 @@
-import { UserSession } from "@/class/users";
 import { BasicMessage, BasicState } from "@/models/sessions";
 import { DeviceData, Mode } from "@/schema";
-import { InteractionMessage } from "@/types/users";
+import { InteractionMessage, UserState } from "@/types/users";
 
 export type AdminActions =
   | "mode"
@@ -14,7 +13,7 @@ export type AdminActions =
 
 export type AdminState = {
   mode: Mode;
-  users: Map<WebSocket, UserSession>;
+  users: Map<WebSocket, UserState>;
 } & BasicState;
 
 export interface AdminModeMessage extends BasicMessage<"mode"> {
@@ -23,7 +22,7 @@ export interface AdminModeMessage extends BasicMessage<"mode"> {
 }
 
 export interface AdminJoinMessage extends BasicMessage<"join"> {
-  user: UserSession;
+  user: UserState;
   ws: WebSocket;
 }
 
@@ -38,17 +37,20 @@ export interface AdminInteractionMessage extends BasicMessage<"interaction"> {
 export interface AdminDeviceMessage extends BasicMessage<"device"> {
   device: DeviceData;
   id: string;
+  ws: WebSocket;
 }
 
 export interface AdminDisplaynameMessage extends BasicMessage<"displayname"> {
   displayname: string;
   id: string;
+  ws: WebSocket;
 }
 
 export interface AdminPositionMessage extends BasicMessage<"position"> {
   x: number;
   y: number;
   id: string;
+  ws: WebSocket;
 }
 
 export type AdminMessage =
