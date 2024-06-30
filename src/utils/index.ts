@@ -13,3 +13,14 @@ export const getRandomInitialPosition = () => {
 
   return { x, y };
 };
+
+export const json = <T>(data: T) => {
+  return JSON.stringify(data);
+};
+export const parse = <T>(data: ArrayBuffer | string): T => {
+  if (typeof data === "string") return JSON.parse(data);
+
+  const decoder = new TextDecoder();
+
+  return JSON.parse(decoder.decode(data));
+};

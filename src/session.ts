@@ -1,69 +1,43 @@
 /* eslint-disable class-methods-use-this */
 import { DurableObjectStorage } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
+import { Env } from "hono";
+import { AdminSession } from "@/class/admin";
+import { UserSession } from "@/class/users";
+import { BadRequestError, InternalServerError } from "@/errors";
 import { DeviceData, Mode } from "@/schema";
-import { WebMultiViewSync } from "@/sync";
-import { checkUUID, getRandomInitialPosition } from "@/utils";
 
-type Sync = { SYNC: DurableObjectNamespace<WebMultiViewSync> };
+import { AdminMessage, AdminState } from "@/types/admin";
+import { InteractionMessage, UserState } from "@/types/users";
+import { json, parse } from "@/utils";
 
-type AssignedPosition = {
-  startWidth: number;
-  startHeight: number;
-  endWidth: number;
-  endHeight: number;
-};
+export class WebMultiViewSession extends DurableObject {
+  users = new Map<WebSocket, UserState>();
 
-type AdminState = {
-  role: "admin";
-  id: string;
-  mode: Mode;
-};
-
-type UserState = {
-  role: "user";
-  width: number;
-  height: number;
-  assignPosition: AssignedPosition;
-  displayname: string;
-  id: string;
-};
-
-type State = AdminState | UserState;
-
-type AdminData = {
-  action: "interaction" | "join" | "leave";
-} & Partial<Data>;
-
-type Data = {
-  x: number;
-  y: number;
-};
-
-export class WebMultiViewSession extends DurableObject<Sync> {
-  sessions = new Map<WebSocket, State>();
+  admin: AdminSession | null;
 
   state: DurableObjectState;
 
   storage: DurableObjectStorage;
 
-  env: Sync;
-
-  timestamp = 0;
-
-  constructor(state: DurableObjectState, env: Sync) {
+  constructor(state: DurableObjectState, env: Env) {
     super(state, env);
 
     this.state = state;
     this.storage = state.storage;
     this.env = env;
+    this.admin = null;
 
-    this.sessions = new Map();
+    this.users = new Map();
 
-    this.state.getWebSockets().forEach((ws) => {
+    this.state.getWebSockets("user").forEach((ws) => {
       const meta = ws.deserializeAttachment();
 
-      this.sessions.set(ws, { ...meta });
+      this.users.set(ws, meta);
+    });
+
+    this.state.getWebSockets("admin").forEach((ws) => {
+      this.admin = new AdminSession(ws, this.updatedAdminUsers, this.users);
     });
   }
 
@@ -79,178 +53,80 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     });
   }
 
-  // WebSocketを受け取った時の処理
   async webSocketMessage(ws: WebSocket, m: ArrayBuffer | string) {
-    const session = this.sessions.get(ws);
+    if (this.admin?.ws === ws) {
+      const data = parse<AdminMessage>(m);
+      this.admin?.onAction(data);
 
-    if (!session) return;
+      return;
+    }
 
-    const data = JSON.parse(m.toString()) as Data;
+    const data = parse<InteractionMessage>(m);
 
     this.broadcastUser(ws, data);
   }
 
-  // 管理者にデータを送信する処理
-  broadcastAdmin(
-    ws: WebSocket | WebSocket[],
-    data: AdminData,
-    senderId: string
-  ) {
-    const sendData = JSON.stringify({ ...data, id: senderId });
+  async broadcastUser(ws: WebSocket, data: InteractionMessage) {
+    this.admin?.onAction({ data, action: "interaction" });
+    const { users } = this;
 
-    if (Array.isArray(ws)) {
-      ws.forEach((socket) => {
-        socket.send(sendData);
-      });
-    } else {
-      ws.send(sendData);
+    const sender = users.get(ws);
+    if (!sender) throw new InternalServerError("Invalid sender");
+
+    for (const meta of users) {
+      const user = this.admin?.getUser(meta[0]);
+
+      if (!user) throw new InternalServerError("User not found");
+
+      user.onAction({ ...data, sender, action: "interaction" });
     }
   }
 
-  // ユーザーにデータを送信する処理
-  async broadcastUser(ws: WebSocket, data: Data) {
-    const sender = this.sessions.get(ws);
-    if (!sender || sender.role === "admin") return;
-
-    const sockets = this.getWebSocketsByRole("user");
-    const admin = this.getWebSocketsByRole("admin");
-
-    this.broadcastAdmin(admin, { action: "interaction", ...data }, sender.id);
-
-    sockets.forEach((socket) => {
-      const me = this.sessions.get(socket);
-
-      if (!me || me.role === "admin") return;
-
-      const { x, y } = data;
-
-      const newX =
-        x - me.assignPosition.startWidth + sender.assignPosition.startWidth;
-      const newY =
-        y - me.assignPosition.startHeight + sender.assignPosition.startHeight;
-
-      socket.send(JSON.stringify({ x: newX, y: newY, senderId: sender.id }));
-    });
-  }
-
-  // 初めてセッションを確立する際の処理
   async handleSession(ws: WebSocket, url: URL) {
     const lastPath = url.pathname.split("/").pop();
 
-    let state: State;
-
     if (lastPath === "admin") {
-      state = this.handleAdmin(url);
-    } else {
-      state = this.handleUser(url);
+      const state = this.handleAdmin(ws);
+
+      this.state.acceptWebSocket(ws, [state.role, state.id]);
+
+      return;
     }
 
-    this.state.acceptWebSocket(ws, [state.role, state.id]);
+    if (!this.admin) throw new InternalServerError("Admin is not connected");
 
-    ws.serializeAttachment({ ...ws.deserializeAttachment(), ...state });
+    const user = this.handleUser(ws, url);
 
-    this.sessions.set(ws, state);
+    this.state.acceptWebSocket(ws, [user.role, user.id]);
 
-    const admin = this.getWebSocketsByRole("admin");
-
-    if (lastPath === "admin" || admin.length === 0) return;
-
-    if (state.role === "admin") return;
-    const userState = state as UserState;
-    admin.forEach((socket) => {
-      socket.send(
-        JSON.stringify({
-          action: "join",
-          id: state.id,
-          width: userState.width,
-          height: userState.height,
-          assignPosition: userState.assignPosition,
-          displayname: userState.displayname,
-        })
-      );
-    });
+    this.admin.onAction({ action: "join", user: user.getState(), ws });
   }
 
-  // 管理者のセッションを作成する際の処理
-  handleAdmin(url: URL): AdminState {
-    const allAdmins = this.getWebSocketsByRole("admin");
+  handleAdmin(ws: WebSocket): AdminState {
+    const admin = new AdminSession(ws, this.updatedAdminUsers, this.users);
 
-    if (allAdmins.length > 0) {
-      const admin = allAdmins[0];
+    this.admin = admin;
 
-      const meta = this.sessions.get(admin) as AdminState;
-
-      if (!meta) {
-        throw new Error("Invalid meta");
-      }
-
-      return { role: "admin", id: meta.id, mode: meta.mode };
-    }
-
-    const id = crypto.randomUUID();
-
-    const searchParams = new URLSearchParams(url.search);
-
-    const mode = (searchParams.get("mode") || "view") as Mode;
-
-    return { role: "admin", id, mode };
+    return admin.state;
   }
 
-  // ユーザーのセッションを作成する際の処理
-  handleUser(url: URL): UserState {
-    const id = url.pathname.split("/").pop();
+  handleUser(ws: WebSocket, url: URL): UserSession {
+    const user = new UserSession(ws, undefined, url, this.updatedUsers);
 
-    if (checkUUID(id) === false || !id) {
-      throw new Error("Invalid UUID");
-    }
-
-    const width = url.searchParams.get("width");
-    const height = url.searchParams.get("height");
-
-    if (!width || !height) {
-      throw new Error("Invalid width or height");
-    }
-
-    const { x, y } = getRandomInitialPosition();
-    const assignPosition = {
-      startWidth: x,
-      startHeight: y,
-      endWidth: parseInt(width, 10),
-      endHeight: parseInt(height, 10),
-    };
-
-    const state = {
-      role: "user" as const,
-      width: parseInt(width, 10),
-      height: parseInt(height, 10),
-      assignPosition,
-      id,
-      displayname: id,
-    };
-
-    return state;
+    return user;
   }
 
-  // WebSocketが閉じられた時の処理
+  private updatedAdminUsers(_: WebSocket, state: AdminState) {
+    this.users = state.users;
+  }
+
+  private updatedUsers(ws: WebSocket, state: UserState) {
+    this.users.set(ws, state);
+  }
+
   async closeOrErrorHandler(ws: WebSocket) {
-    const session = this.sessions.get(ws);
-
-    if (!session) return;
-
-    this.sessions.delete(ws);
-
-    const admin = this.ctx.getWebSockets("admin");
-
-    if (admin.length === 0) return;
-
-    admin.forEach((socket) => {
-      socket.send(
-        JSON.stringify({
-          id: session.id,
-          action: "leave",
-        })
-      );
-    });
+    this.admin?.onAction({ action: "leave", ws });
+    ws.close();
   }
 
   async webSocketClose(ws: WebSocket) {
@@ -261,269 +137,68 @@ export class WebMultiViewSession extends DurableObject<Sync> {
     this.closeOrErrorHandler(ws);
   }
 
-  // roleを指定してWebSocketを取得する
-  getWebSocketsByRole(role: "admin" | "user") {
-    return this.ctx.getWebSockets(role);
+  // ユーザーの位置を変更するAPI
+  async changePosition(id: string, position: { x: number; y: number }) {
+    const ws = this.getUserWsById(id);
+    this.admin?.onAction({ action: "position", ...position, id, ws });
   }
 
-  // 全ユーザーのセッションを取得する
-  getUserSessions(): UserState[] {
-    const sessions = Array.from(this.sessions.values());
+  async resize(id: string, window: { width: number; height: number }) {
+    const session = this.ctx.getWebSockets(id)[0];
 
-    const users = sessions.filter(
-      (session) => session.role === "user"
-    ) as UserState[];
+    const user = this.admin?.getUser(session);
+
+    if (!user || user.role !== "user") {
+      throw new BadRequestError("Invalid user");
+    }
+
+    user.onAction({ action: "resize", ...window });
+
+    this.admin?.ws.send(json({ action: "resize", ...user.getState() }));
+  }
+
+  changeDisplayName(id: string, displayname: string) {
+    const ws = this.getUserWsById(id);
+    this.admin?.onAction({ action: "displayname", displayname, id, ws });
+  }
+
+  changeDevice(id: string, device: DeviceData) {
+    const ws = this.getUserWsById(id);
+    this.admin?.onAction({ action: "device", device, id, ws });
+  }
+
+  setMode(mode: Mode) {
+    this.admin?.onAction({ action: "mode", mode });
+
+    for (const meta of this.users) {
+      const user = this.admin?.getUser(meta[0]);
+      if (!user) throw new InternalServerError("User not found");
+
+      user.onAction({ action: "mode", mode });
+    }
+  }
+
+  getUserSessions(): UserState[] {
+    const users = Array.from(this.users.values());
 
     return users;
   }
 
-  // ユーザーの位置を変更するAPI
-  async changePosition(id: string, position: { x: number; y: number }) {
-    const sessions = this.ctx.getWebSockets(id);
-
-    if (sessions.length !== 1 || !sessions[0]) {
-      throw new Error("Invalid session");
-    }
-
-    const session = sessions[0];
-
-    const user = this.sessions.get(session);
-
-    if (!user || user.role !== "user") {
-      throw new Error("Invalid user");
-    }
-
-    const assignPosition: AssignedPosition = {
-      startWidth: position.x,
-      startHeight: position.y,
-      endWidth: position.x + user.width,
-      endHeight: position.y + user.height,
-    };
-
-    this.sessions.set(session, { ...user, assignPosition });
-
-    session.serializeAttachment({
-      ...session.deserializeAttachment(),
-      assignPosition,
-    });
-
-    const admin = this.getWebSocketsByRole("admin");
-
-    admin.forEach((socket) => {
-      socket.send(
-        JSON.stringify({
-          id,
-          action: "position",
-          assignPosition,
-        })
-      );
-    });
-  }
-
-  async resize(id: string, window: { width: number; height: number }) {
-    const sessions = this.ctx.getWebSockets(id);
-
-    if (sessions.length !== 1 || !sessions[0]) {
-      throw new Error("Invalid session");
-    }
-
-    const session = sessions[0];
-
-    const user = this.sessions.get(session);
-
-    if (!user || user.role !== "user") {
-      throw new Error("Invalid user");
-    }
-
-    const assignPosition: AssignedPosition = {
-      ...user.assignPosition,
-      endWidth: user.assignPosition.startWidth + window.width,
-      endHeight: user.assignPosition.startHeight + window.height,
-    };
-
-    this.sessions.set(session, {
-      ...user,
-      width: window.width,
-      height: window.height,
-      assignPosition,
-    });
-
-    session.serializeAttachment({
-      ...session.deserializeAttachment(),
-      width: window.width,
-      height: window.height,
-      assignPosition,
-    });
-
-    const admin = this.getWebSocketsByRole("admin");
-
-    admin.forEach((socket) => {
-      socket.send(
-        JSON.stringify({
-          id,
-          action: "resize",
-          width: window.width,
-          height: window.height,
-        })
-      );
-    });
-  }
-
-  getSession(id: string): WebSocket | null {
-    const sessions = this.ctx.getWebSockets(id);
-
-    if (sessions.length !== 1 || !sessions[0]) {
-      return null;
-    }
-
-    return sessions[0];
-  }
-
-  selectUser(id: string) {
-    const session = this.getSession(id);
-
-    if (!session) {
-      throw new Error("Invalid user");
-    }
-
-    session.send(
-      JSON.stringify({
-        action: "select",
-      })
-    );
-  }
-
-  changeDisplayName(id: string, displayname: string) {
-    const session = this.getSession(id);
-
-    if (!session) {
-      throw new Error("Invalid user");
-    }
-
-    const user = this.sessions.get(session);
-
-    if (!user || user.role !== "user") {
-      throw new Error("Invalid user");
-    }
-
-    this.sessions.set(session, { ...user, displayname });
-
-    session.serializeAttachment({
-      ...session.deserializeAttachment(),
-      displayname,
-    });
-
-    const admin = this.getWebSocketsByRole("admin");
-
-    admin.forEach((socket) => {
-      socket.send(
-        JSON.stringify({
-          id,
-          action: "displayname",
-          displayname,
-        })
-      );
-    });
-  }
-
-  changeDevice(id: string, device: DeviceData) {
-    const session = this.getSession(id);
-
-    if (!session) {
-      throw new Error("Invalid user");
-    }
-
-    const user = this.sessions.get(session);
-
-    if (!user || user.role !== "user") {
-      throw new Error("Invalid user");
-    }
-
-    const assignPosition: AssignedPosition = {
-      startWidth: device.x,
-      startHeight: device.y,
-      endWidth: device.x + user.width,
-      endHeight: device.y + user.height,
-    };
-
-    this.sessions.set(session, {
-      ...user,
-      assignPosition,
-      width: device.width,
-      height: device.height,
-    });
-
-    session.serializeAttachment({
-      ...session.deserializeAttachment(),
-      assignPosition,
-    });
-
-    const admin = this.getWebSocketsByRole("admin");
-
-    admin.forEach((socket) => {
-      socket.send(
-        JSON.stringify({
-          ...user,
-          assignPosition,
-          width: device.width,
-          height: device.height,
-          id,
-          action: "device",
-          x: device.x,
-          y: device.y,
-        })
-      );
-    });
-  }
-
-  setMode(mode: Mode) {
-    const admins = this.getWebSocketsByRole("admin");
-
-    if (admins.length !== 1) {
-      throw new Error("Invalid admin");
-    }
-
-    const session = admins[0];
-    const meta = this.sessions.get(session);
-
-    if (!meta || meta.role !== "admin") {
-      throw new Error("Invalid admin");
-    }
-
-    this.sessions.set(session, { ...meta, mode });
-
-    session.serializeAttachment({
-      ...session.deserializeAttachment(),
-      mode,
-    });
-
-    const users = this.getWebSocketsByRole("user");
-
-    users.forEach((socket) => {
-      socket.send(
-        JSON.stringify({
-          action: "mode",
-          mode,
-        })
-      );
-    });
-  }
-
   getMode(): Mode {
-    const admins = this.getWebSocketsByRole("admin");
+    if (!this.admin) throw new InternalServerError("Admin is not connected");
 
-    if (admins.length !== 1) {
-      throw new Error("Invalid admin");
-    }
+    return this.admin.state.mode;
+  }
 
-    const session = admins[0];
+  private getUserWsById(id: string): WebSocket {
+    const sessions = this.state.getWebSockets(id);
 
-    const meta = this.sessions.get(session);
+    if (!sessions.length) throw new BadRequestError("Invalid user");
+    if (sessions.length > 1)
+      throw new InternalServerError("Multiple users found");
 
-    if (!meta || meta.role !== "admin") {
-      throw new Error("Invalid admin");
-    }
+    const [ws] = sessions;
 
-    return meta.mode;
+    return ws;
   }
 }
