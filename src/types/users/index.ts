@@ -15,7 +15,8 @@ export type UserActions =
   | "mode"
   | "device"
   | "displayname"
-  | "position";
+  | "position"
+  | "uploaded";
 
 export interface InteractionMessage extends BasicMessage<"interaction"> {
   sender: UserState;
@@ -47,10 +48,15 @@ export interface PositionMessage extends BasicMessage<"position"> {
   y: number;
 }
 
+export interface UploadedMessage extends BasicMessage<"uploaded"> {
+  id: string;
+}
+
 export type UserMessage =
   | InteractionMessage
   | ResizeMessage
   | ModeMessage
   | DeviceMessage
   | DisplaynameMessage
-  | PositionMessage;
+  | PositionMessage
+  | UploadedMessage;
