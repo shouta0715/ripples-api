@@ -75,6 +75,10 @@ export class AdminSession
       case "position":
         this.actionPosition(data);
         break;
+
+      case "uploaded":
+        this.actionUploaded(data);
+        break;
       default:
         break;
     }
@@ -147,6 +151,10 @@ export class AdminSession
     this.updateUser(user.ws, user.getState());
 
     this.ws.send(json({ action: "position", ...user.getState() }));
+  }
+
+  private actionUploaded(data: AdminMessage) {
+    this.ws.send(json({ ...data }));
   }
 
   getUser(ws: WebSocket): UserSession {
