@@ -83,6 +83,7 @@
     "no-continue": "off",
     "no-restricted-syntax": "off",
     "@typescript-eslint/naming-convention": "off",
-    "import/no-unresolved": "off"
+    "import/no-unresolved": "off",
+    "import/no-cycle": "off"
   }
 }
