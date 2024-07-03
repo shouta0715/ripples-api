@@ -7,6 +7,11 @@ bindings = [
   {name = "SESSION", class_name = "WebMultiViewSession"}
 ]
 
+[[r2_buckets]]
+binding = "IMAGES" 
+bucket_name = "images" 
+preview_bucket_name = "images" 
+
 [[migrations]]
 tag = "v1" # Should be unique for each entry
-new_classes = ["WebMultiViewSync", "WebMultiViewSession"]
+new_classes = ["WebMultiViewSession"]
