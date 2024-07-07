@@ -9,6 +9,7 @@ import {
   ModeMessage,
   PositionMessage,
   ResizeMessage,
+  UploadedMessage,
   UserActions,
   UserMessage,
   UserState,
@@ -83,6 +84,10 @@ export class UserSession
         break;
       case "position":
         this.actionPosition(data);
+        break;
+
+      case "uploaded":
+        this.actionUploaded(data);
         break;
       default:
         throw new BadRequestError("Unknown action");
@@ -163,5 +168,9 @@ export class UserSession
     };
 
     this.saveState({ assignPosition: newPosition });
+  }
+
+  private actionUploaded(data: UploadedMessage): void {
+    this.ws.send(json({ action: "uploaded", id: data.id }));
   }
 }

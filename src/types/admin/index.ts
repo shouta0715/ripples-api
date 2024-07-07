@@ -9,7 +9,8 @@ export type AdminActions =
   | "interaction"
   | "device"
   | "displayname"
-  | "position";
+  | "position"
+  | "uploaded";
 
 export type AdminState = {
   mode: Mode;
@@ -53,6 +54,10 @@ export interface AdminPositionMessage extends BasicMessage<"position"> {
   ws: WebSocket;
 }
 
+export interface AdminUploadedMessage extends BasicMessage<"uploaded"> {
+  id: string;
+}
+
 export type AdminMessage =
   | AdminModeMessage
   | AdminJoinMessage
@@ -60,4 +65,5 @@ export type AdminMessage =
   | AdminInteractionMessage
   | AdminDeviceMessage
   | AdminDisplaynameMessage
-  | AdminPositionMessage;
+  | AdminPositionMessage
+  | AdminUploadedMessage;
