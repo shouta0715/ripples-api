@@ -4,6 +4,7 @@ export abstract class BasicSession<
   S extends BasicState,
   A extends string,
   M extends BasicMessage<A>,
+  TMeta = unknown,
 > implements Session<S, A, M>
 {
   role: "admin" | "user";
@@ -16,7 +17,9 @@ export abstract class BasicSession<
 
   protected listeners: ((ws: WebSocket, state: S) => void)[] = [];
 
-  addListener(listenerFn: (ws: WebSocket, state: S) => void): void {
+  addListener(
+    listenerFn: (ws: WebSocket, state: S, meta?: TMeta) => void
+  ): void {
     this.listeners.push(listenerFn);
   }
 
@@ -44,9 +47,10 @@ export abstract class BasicSession<
   }
 
   saveState(state?: Partial<S>): S {
-    const prevState = this.loadState();
+    const prevState = this.loadState() || this.state;
 
     const newState = { ...prevState, ...state };
+
     this.ws.serializeAttachment(newState);
     this.state = newState;
 
