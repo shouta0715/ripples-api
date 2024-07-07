@@ -19,24 +19,37 @@ import { UserState } from "@/types/users";
 import { json } from "@/utils";
 
 export class AdminSession
-  extends BasicSession<AdminState, AdminActions, AdminMessage>
+  extends BasicSession<
+    AdminState,
+    AdminActions,
+    AdminMessage,
+    Map<WebSocket, UserState>
+  >
   implements Session<AdminState, AdminActions, AdminMessage>
 {
+  users: Map<WebSocket, UserState> = new Map();
+
   constructor(
     ws: WebSocket,
-    cb: (ws: WebSocket, state: AdminState) => void,
+    cb: (
+      ws: WebSocket,
+      state: AdminState,
+      meta?: Map<WebSocket, UserState>
+    ) => void,
     initialUsers: Map<WebSocket, UserState>
   ) {
     const initialState: AdminState = {
       role: "admin",
       id: crypto.randomUUID(),
       mode: "view",
-      users: initialUsers,
     };
+
     super(ws, "admin", initialState);
     this.state = this.onConnect();
     this.id = this.state.id;
     this.addListener(cb);
+
+    this.users = initialUsers;
   }
 
   onConnect(): AdminState {
@@ -85,7 +98,7 @@ export class AdminSession
   }
 
   updateUser(ws: WebSocket, user: UserState) {
-    this.state.users.set(ws, user);
+    this.users.set(ws, user);
   }
 
   private actionMode(data: AdminModeMessage): void {
@@ -97,21 +110,23 @@ export class AdminSession
   private actionJoin(data: AdminJoinMessage) {
     const { user, ws } = data;
 
-    this.state.users.set(ws, user);
+    this.users.set(ws, user);
     this.ws.send(json({ action: "join", ...user }));
+
+    this.saveUsersState();
   }
 
   private actionLeave(data: AdminLeaveMessage) {
     const { ws } = data;
 
-    const target = this.state.users.get(ws);
+    const target = this.users.get(ws);
 
     if (!target) throw new BadRequestError("Invalid user");
-    this.state.users.delete(ws);
+    this.users.delete(ws);
 
     this.ws.send(json({ action: "leave", id: target.id }));
 
-    this.saveState({ users: this.state.users });
+    this.saveUsersState();
   }
 
   private actionInteraction({ data }: AdminInteractionMessage) {
@@ -158,12 +173,25 @@ export class AdminSession
   }
 
   getUser(ws: WebSocket): UserSession {
-    const user = this.state.users.get(ws);
+    const user = this.users.get(ws);
 
     if (!user) {
       throw new BadRequestError("Invalid user");
     }
 
     return new UserSession(ws, user, undefined, this.updateUser.bind(this));
+  }
+
+  private saveUsersState() {
+    const users = Array.from(this.users).map(([ws, user]) => {
+      return { ws, user };
+    });
+
+    for (const { ws, user } of users) {
+      ws.serializeAttachment({
+        ...ws.deserializeAttachment(),
+        ...user,
+      });
+    }
   }
 }

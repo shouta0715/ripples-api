@@ -14,7 +14,6 @@ export type AdminActions =
 
 export type AdminState = {
   mode: Mode;
-  users: Map<WebSocket, UserState>;
 } & BasicState;
 
 export interface AdminModeMessage extends BasicMessage<"mode"> {

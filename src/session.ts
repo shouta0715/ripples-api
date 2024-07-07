@@ -133,7 +133,11 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
   }
 
   private handleAdmin(ws: WebSocket): AdminState {
-    const admin = new AdminSession(ws, this.updatedAdminUsers, this.users);
+    const admin = new AdminSession(
+      ws,
+      this.updatedAdminUsers.bind(this),
+      this.users
+    );
 
     this.admin = admin;
 
@@ -146,8 +150,14 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
     return user;
   }
 
-  private updatedAdminUsers(_: WebSocket, state: AdminState) {
-    this.users = state.users;
+  private updatedAdminUsers(
+    _: WebSocket,
+    __: AdminState,
+    meta?: Map<WebSocket, UserState>
+  ) {
+    if (meta) {
+      this.users = meta;
+    }
   }
 
   private updatedUsers(ws: WebSocket, state: UserState) {
