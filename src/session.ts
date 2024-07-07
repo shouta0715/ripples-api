@@ -1,19 +1,22 @@
 /* eslint-disable class-methods-use-this */
 import { DurableObjectStorage } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
-import { Env } from "hono";
 import { AdminSession } from "@/class/admin";
 import { UserSession } from "@/class/users";
 import { BadRequestError, InternalServerError } from "@/errors";
 import { DeviceData, Mode } from "@/schema";
 
 import { AdminMessage, AdminState } from "@/types/admin";
-import { InteractionMessage, UserState } from "@/types/users";
-import { json, parse } from "@/utils";
 
-export class WebMultiViewSession extends DurableObject {
+import { SyncEnv } from "@/types/env";
+import { InteractionMessage, UserState } from "@/types/users";
+import { checkUUID, json, parse } from "@/utils";
+
+export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
   // 接続されているユーザーの情報を保持するMap
   users = new Map<WebSocket, UserState>();
+
+  images: string[] = [];
 
   // 管理者の情報を保持する
   admin: AdminSession | null;
@@ -22,7 +25,7 @@ export class WebMultiViewSession extends DurableObject {
 
   storage: DurableObjectStorage;
 
-  constructor(state: DurableObjectState, env: Env) {
+  constructor(state: DurableObjectState, env: SyncEnv["Bindings"]) {
     super(state, env);
 
     this.state = state;
@@ -48,6 +51,15 @@ export class WebMultiViewSession extends DurableObject {
   ****************************** */
 
   async fetch(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    // app-name/images or app-name/images/<uuid?
+    const lastPath = url.pathname.split("/").pop();
+    const secondLastPath = url.pathname.split("/").slice(-2)[0];
+
+    if (lastPath === "upload" || secondLastPath === "images") {
+      return this.handleImageRequest(req);
+    }
+
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
 
@@ -160,6 +172,90 @@ export class WebMultiViewSession extends DurableObject {
   }
 
   /** ****************************
+    ここからは、画像のアップロードと取得を処理するためのメソッドです。
+  ****************************** */
+
+  private async handleImageRequest(req: Request): Promise<Response> {
+    switch (req.method) {
+      case "POST":
+        return this.uploadImage(req);
+      case "GET":
+        return this.getImageData(req);
+      default:
+        return new Response("Not Found", { status: 404 });
+    }
+  }
+
+  private async uploadImage(req: Request): Promise<Response> {
+    const formData = await req.formData();
+    const file = formData.get("image") as File | null;
+
+    if (!file) {
+      return new Response("Image not found", { status: 400 });
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+
+    const id = crypto.randomUUID();
+
+    await this.env.IMAGES.put(id, arrayBuffer, {
+      httpMetadata: { contentType: file.type },
+    });
+
+    this.images.push(id);
+
+    // this.saveImages();
+
+    this.admin?.onAction({ action: "uploaded", id });
+
+    const { users } = this;
+
+    for (const meta of users) {
+      const user = this.admin?.getUser(meta[0]);
+
+      user?.onAction({ action: "uploaded", id });
+    }
+
+    return new Response(json({ id }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  private async getImageData(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+
+    const lastPath = url.pathname.split("/").pop();
+
+    if (!lastPath || checkUUID(lastPath) === false) {
+      throw new BadRequestError("Invalid ID");
+    }
+
+    const image = await this.env.IMAGES.get(lastPath);
+
+    if (!image) throw new BadRequestError("Image not found");
+
+    const headers = new Headers();
+    image.writeHttpMetadata(headers);
+    headers.set("etag", image.httpEtag);
+    headers.set("cache-control", "public, max-age=31536000");
+
+    return new Response(image.body, {
+      headers,
+    });
+  }
+
+  private saveImages() {
+    const { admin } = this;
+
+    if (!admin) throw new InternalServerError("Admin is not connected");
+
+    admin.ws.serializeAttachment({
+      ...admin.ws.deserializeAttachment(),
+      images: this.images,
+    });
+  }
+
+  /** ****************************
     ここからは、POSTでのリクエストを処理するためのメソッドです。
     routerから呼び出されます。
   ****************************** */
@@ -214,5 +310,15 @@ export class WebMultiViewSession extends DurableObject {
     if (!this.admin) throw new InternalServerError("Admin is not connected");
 
     return this.admin.state.mode;
+  }
+
+  uploadedImage(id: string) {
+    this.admin?.onAction({ action: "uploaded", id });
+
+    for (const meta of this.users) {
+      const user = this.admin?.getUser(meta[0]);
+
+      user?.onAction({ action: "uploaded", id });
+    }
   }
 }
