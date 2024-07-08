@@ -1,8 +1,22 @@
 import { z } from "zod";
 
+export const panelPosition = z.enum([
+  "top left",
+  "top right",
+  "top center",
+  "bottom left",
+  "bottom right",
+  "bottom center",
+  "center left",
+  "center right",
+  "center",
+  "initial",
+]);
+
 export const positionSchema = z.object({
   x: z.number(),
   y: z.number(),
+  position: panelPosition,
 });
 
 export const windowSchema = z.object({
@@ -27,3 +41,4 @@ export const modeSchema = z.object({
 
 export type DeviceData = z.infer<typeof changeDeviceSchema>;
 export type Mode = z.infer<typeof modeSchema>["mode"];
+export type Position = z.infer<typeof panelPosition>;

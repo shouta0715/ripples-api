@@ -1,6 +1,6 @@
 import { BasicMessage, BasicState } from "@/models/sessions";
-import { DeviceData, Mode } from "@/schema";
-import { AssignedPosition, Position } from "@/types/position";
+import { DeviceData, Mode, Position } from "@/schema";
+import { AssignedPosition } from "@/types/position";
 
 export type UserState = {
   width: number;
