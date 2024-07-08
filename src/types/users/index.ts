@@ -1,12 +1,13 @@
 import { BasicMessage, BasicState } from "@/models/sessions";
 import { DeviceData, Mode } from "@/schema";
-import { AssignedPosition } from "@/types/position";
+import { AssignedPosition, Position } from "@/types/position";
 
 export type UserState = {
   width: number;
   height: number;
   displayname: string;
   assignPosition: AssignedPosition;
+  position: Position;
 } & BasicState;
 
 export type UserActions =

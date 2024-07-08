@@ -58,6 +58,7 @@ export class UserSession
       displayname: id,
       id,
       role: "user",
+      position: "initial",
     };
 
     this.saveState(state);
