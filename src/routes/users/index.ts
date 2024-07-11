@@ -18,6 +18,17 @@ app.use(
   })
 );
 
+app.use(
+  "/:id/state",
+  cors({
+    origin: "*",
+    allowMethods: ["GET"],
+    exposeHeaders: ["Content-Length"],
+    allowHeaders: ["Content-Type"],
+    credentials: true,
+  })
+);
+
 app.post("/register", async (c) => {
   const id = crypto.randomUUID();
 
