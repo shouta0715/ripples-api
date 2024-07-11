@@ -38,6 +38,17 @@ app.get("/:id", sessionMiddleware, async (c) => {
   return c.var.session.fetch(c.req.raw);
 });
 
+app.get("/:id/state", async (c) => {
+  const appName = c.req.param("app-name");
+  const stub = getSessionStub(c, appName);
+
+  const userId = c.req.param("id");
+
+  const state = await stub.getUserState(userId);
+
+  return c.json(state);
+});
+
 app.post("/:id/resize", zValidator("json", windowSchema), async (c) => {
   const appName = c.req.param("app-name");
   const stub = getSessionStub(c, appName);
