@@ -4,7 +4,7 @@ import { DurableObject } from "cloudflare:workers";
 import { AdminSession } from "@/class/admin";
 import { UserSession } from "@/class/users";
 import { BadRequestError, InternalServerError } from "@/errors";
-import { DeviceData, Mode } from "@/schema";
+import { DeviceData, Mode, PositionSchema } from "@/schema";
 
 import { AdminMessage, AdminState } from "@/types/admin";
 
@@ -270,9 +270,9 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
     routerから呼び出されます。
   ****************************** */
 
-  changePosition(id: string, position: { x: number; y: number }) {
+  changePosition(id: string, data: PositionSchema) {
     const ws = this.getUserWsById(id);
-    this.admin?.onAction({ action: "position", ...position, id, ws });
+    this.admin?.onAction({ action: "position", ...data, id, ws });
   }
 
   resize(id: string, window: { width: number; height: number }) {
@@ -296,6 +296,7 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
 
   changeDevice(id: string, device: DeviceData) {
     const ws = this.getUserWsById(id);
+
     this.admin?.onAction({ action: "device", device, id, ws });
   }
 
@@ -330,5 +331,15 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
 
       user?.onAction({ action: "uploaded", id });
     }
+  }
+
+  getUserState(id: string): UserState {
+    const ws = this.getUserWsById(id);
+
+    const user = this.admin?.getUser(ws);
+
+    if (!user) throw new BadRequestError("Invalid user");
+
+    return user.getState();
   }
 }

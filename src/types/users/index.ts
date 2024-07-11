@@ -1,5 +1,5 @@
 import { BasicMessage, BasicState } from "@/models/sessions";
-import { DeviceData, Mode } from "@/schema";
+import { Alignment, DeviceData, Mode } from "@/schema";
 import { AssignedPosition } from "@/types/position";
 
 export type UserState = {
@@ -7,6 +7,7 @@ export type UserState = {
   height: number;
   displayname: string;
   assignPosition: AssignedPosition;
+  alignment: Alignment;
 } & BasicState;
 
 export type UserActions =
@@ -46,6 +47,7 @@ export interface DisplaynameMessage extends BasicMessage<"displayname"> {
 export interface PositionMessage extends BasicMessage<"position"> {
   x: number;
   y: number;
+  alignment: Alignment;
 }
 
 export interface UploadedMessage extends BasicMessage<"uploaded"> {

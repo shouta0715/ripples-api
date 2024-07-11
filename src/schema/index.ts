@@ -1,8 +1,14 @@
 import { z } from "zod";
 
+export const alignment = z.object({
+  isLeft: z.boolean(),
+  isRight: z.boolean(),
+});
+
 export const positionSchema = z.object({
   x: z.number(),
   y: z.number(),
+  alignment,
 });
 
 export const windowSchema = z.object({
@@ -27,3 +33,5 @@ export const modeSchema = z.object({
 
 export type DeviceData = z.infer<typeof changeDeviceSchema>;
 export type Mode = z.infer<typeof modeSchema>["mode"];
+export type Alignment = z.infer<typeof alignment>;
+export type PositionSchema = z.infer<typeof positionSchema>;

@@ -93,6 +93,7 @@ app.post("/:id/device", zValidator("json", changeDeviceSchema), async (c) => {
   const userId = c.req.param("id");
 
   const device = c.req.valid("json");
+
   await stub.changeDevice(userId, device);
 
   return c.json({ success: true });

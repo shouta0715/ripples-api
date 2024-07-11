@@ -99,6 +99,8 @@ export class AdminSession
 
   updateUser(ws: WebSocket, user: UserState) {
     this.users.set(ws, user);
+
+    this.saveUsersState();
   }
 
   private actionMode(data: AdminModeMessage): void {
@@ -137,10 +139,11 @@ export class AdminSession
     const { device, ws } = data;
 
     const user = this.getUser(ws);
+    if (!user) throw new BadRequestError("Invalid user");
 
     user.onAction({ action: "device", device, ws });
 
-    this.updateUser(user.ws, user.getState());
+    this.updateUser(user.ws, { ...user.getState(), ...device });
 
     this.ws.send(json({ action: "device", ...user.getState() }));
   }
@@ -157,11 +160,11 @@ export class AdminSession
   }
 
   private actionPosition(data: AdminPositionMessage) {
-    const { x, y, ws } = data;
+    const { x, y, ws, alignment } = data;
 
     const user = this.getUser(ws);
 
-    user.onAction({ action: "position", x, y, ws });
+    user.onAction({ action: "position", x, y, ws, alignment });
 
     this.updateUser(user.ws, user.getState());
 
