@@ -58,7 +58,7 @@ export class UserSession
       displayname: id,
       id,
       role: "user",
-      position: "initial",
+      alignment: { isLeft: false, isRight: false },
     };
 
     this.saveState(state);
@@ -158,7 +158,7 @@ export class UserSession
   }
 
   private actionPosition(data: PositionMessage): void {
-    const { x, y } = data;
+    const { x, y, alignment } = data;
     const { width, height } = this.state;
 
     const newPosition: AssignedPosition = {
@@ -168,7 +168,9 @@ export class UserSession
       endY: y + height,
     };
 
-    this.saveState({ assignPosition: newPosition });
+    this.saveState({ assignPosition: newPosition, alignment });
+
+    // this.ws.send(json({ ...data, action: "position" }));
   }
 
   private actionUploaded(data: UploadedMessage): void {

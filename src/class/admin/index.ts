@@ -160,11 +160,11 @@ export class AdminSession
   }
 
   private actionPosition(data: AdminPositionMessage) {
-    const { x, y, ws } = data;
+    const { x, y, ws, alignment } = data;
 
     const user = this.getUser(ws);
 
-    user.onAction({ action: "position", x, y, ws });
+    user.onAction({ action: "position", x, y, ws, alignment });
 
     this.updateUser(user.ws, user.getState());
 
