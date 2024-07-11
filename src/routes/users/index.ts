@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getSessionStub, sessionMiddleware } from "@/middleware";
-import { windowSchema } from "@/schema";
+import { overSchema, windowSchema } from "@/schema";
 import { SyncEnv } from "@/types/env";
 
 const app = new Hono<SyncEnv>().basePath("/:app-name");
@@ -23,6 +23,17 @@ app.use(
   cors({
     origin: "*",
     allowMethods: ["GET"],
+    exposeHeaders: ["Content-Length"],
+    allowHeaders: ["Content-Type"],
+    credentials: true,
+  })
+);
+
+app.use(
+  "/:id/over",
+  cors({
+    origin: "*",
+    allowMethods: ["POST"],
     exposeHeaders: ["Content-Length"],
     allowHeaders: ["Content-Type"],
     credentials: true,
@@ -68,6 +79,18 @@ app.post("/:id/resize", zValidator("json", windowSchema), async (c) => {
 
   const window = c.req.valid("json");
   await stub.resize(userId, window);
+
+  return c.json({ success: true });
+});
+
+app.post("/:id/over", zValidator("json", overSchema), async (c) => {
+  const appName = c.req.param("app-name");
+  const stub = getSessionStub(c, appName);
+
+  const userId = c.req.param("id");
+  const data = c.req.valid("json");
+
+  await stub.onOver(userId, data);
 
   return c.json({ success: true });
 });

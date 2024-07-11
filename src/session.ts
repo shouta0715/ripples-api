@@ -4,7 +4,7 @@ import { DurableObject } from "cloudflare:workers";
 import { AdminSession } from "@/class/admin";
 import { UserSession } from "@/class/users";
 import { BadRequestError, InternalServerError } from "@/errors";
-import { DeviceData, Mode, PositionSchema } from "@/schema";
+import { DeviceData, Mode, OverSchema, PositionSchema } from "@/schema";
 
 import { AdminMessage, AdminState } from "@/types/admin";
 
@@ -330,6 +330,28 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
       const user = this.admin?.getUser(meta[0]);
 
       user?.onAction({ action: "uploaded", id });
+    }
+  }
+
+  onOver(id: string, data: OverSchema) {
+    const ws = this.getUserWsById(id);
+
+    const sender = this.users.get(ws);
+    if (!sender) throw new InternalServerError("Invalid sender");
+
+    for (const meta of this.users) {
+      const user = this.admin?.getUser(meta[0]);
+
+      if (!user) throw new InternalServerError("User not found");
+
+      const isNextTo =
+        Math.abs(
+          sender.assignPosition.endX - user.state.assignPosition.startX
+        ) < 10;
+
+      console.log(isNextTo, sender.id, user.state.id);
+      if (!isNextTo || sender.id === user.state.id) continue;
+      user.onAction({ ...data, sender, action: "interaction" });
     }
   }
 
