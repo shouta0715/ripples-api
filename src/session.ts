@@ -349,7 +349,6 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
           sender.assignPosition.endX - user.state.assignPosition.startX
         ) < 10;
 
-      console.log(isNextTo, sender.id, user.state.id);
       if (!isNextTo || sender.id === user.state.id) continue;
       user.onAction({ ...data, sender, action: "interaction" });
     }

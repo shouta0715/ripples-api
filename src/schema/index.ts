@@ -35,6 +35,7 @@ export const overSchema = z.object({
   x: z.number(),
   y: z.number(),
   id: z.string(),
+  data: z.record(z.unknown()),
 });
 
 export type DeviceData = z.infer<typeof changeDeviceSchema>;
