@@ -63,6 +63,7 @@ export class UserSession
       role: "user",
       alignment: { isLeft: false, isRight: false },
       connections: [],
+      isStartDevice: false,
     };
 
     this.saveState(state);
@@ -161,7 +162,7 @@ export class UserSession
       endY: y + height,
     };
 
-    const state = { ...this.state, assignPosition: newPosition };
+    const state = { ...this.state, assignPosition: newPosition, ...device };
 
     this.saveState(state);
   }

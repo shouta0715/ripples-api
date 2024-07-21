@@ -228,6 +228,7 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
 
     for (const meta of users) {
       const user = this.admin?.getUser(meta[0]);
+      if (!user?.state.isStartDevice) continue;
 
       user?.onAction({ action: "uploaded", id });
     }

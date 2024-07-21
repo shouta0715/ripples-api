@@ -32,6 +32,7 @@ export const changeDeviceSchema = z.object({
   y: z.number(),
   width: z.number(),
   height: z.number(),
+  isStartDevice: z.boolean(),
 });
 
 export const modeSchema = z.object({
