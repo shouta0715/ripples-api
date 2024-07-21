@@ -26,7 +26,8 @@ export type UserActions =
   | "displayname"
   | "position"
   | "uploaded"
-  | "connect";
+  | "connect"
+  | "disconnect";
 
 export interface InteractionMessage extends BasicMessage<"interaction"> {
   sender: UserState;
@@ -70,6 +71,13 @@ export interface ConnectMessage extends BasicMessage<"connect"> {
   source: string;
 }
 
+export interface DisconnectMessage extends BasicMessage<"disconnect"> {
+  target: string;
+  from: Direction;
+  to: Direction;
+  source: string;
+}
+
 export type UserMessage =
   | InteractionMessage
   | ResizeMessage
@@ -78,4 +86,5 @@ export type UserMessage =
   | DisplaynameMessage
   | PositionMessage
   | UploadedMessage
-  | ConnectMessage;
+  | ConnectMessage
+  | DisconnectMessage;

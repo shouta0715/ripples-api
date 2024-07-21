@@ -11,7 +11,8 @@ export type AdminActions =
   | "displayname"
   | "position"
   | "uploaded"
-  | "connect";
+  | "connect"
+  | "disconnect";
 
 export type AdminState = {
   mode: Mode;
@@ -67,6 +68,14 @@ export interface AdminConnectMessage extends BasicMessage<"connect"> {
   ws: WebSocket;
 }
 
+export interface AdminDisconnectMessage extends BasicMessage<"disconnect"> {
+  target: string;
+  ws: WebSocket;
+  from: Direction;
+  to: Direction;
+  source: string;
+}
+
 export type AdminMessage =
   | AdminModeMessage
   | AdminJoinMessage
@@ -76,4 +85,5 @@ export type AdminMessage =
   | AdminDisplaynameMessage
   | AdminPositionMessage
   | AdminUploadedMessage
-  | AdminConnectMessage;
+  | AdminConnectMessage
+  | AdminDisconnectMessage;
