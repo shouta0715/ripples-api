@@ -3,6 +3,7 @@ import { BadRequestError } from "@/errors";
 import { Session } from "@/models/sessions";
 import { AssignedPosition } from "@/types/position";
 import {
+  ConnectionMessage,
   DeviceMessage,
   DisplaynameMessage,
   InteractionMessage,
@@ -59,6 +60,7 @@ export class UserSession
       id,
       role: "user",
       alignment: { isLeft: false, isRight: false },
+      connections: [],
     };
 
     this.saveState(state);
@@ -90,6 +92,11 @@ export class UserSession
       case "uploaded":
         this.actionUploaded(data);
         break;
+
+      case "connection":
+        this.actionConnection(data);
+        break;
+
       default:
         throw new BadRequestError("Unknown action");
     }
@@ -175,5 +182,13 @@ export class UserSession
 
   private actionUploaded(data: UploadedMessage): void {
     this.ws.send(json({ action: "uploaded", id: data.id }));
+  }
+
+  private actionConnection(data: ConnectionMessage): void {
+    const { target, from, to, source } = data;
+
+    const connection = { target, from, to, source };
+
+    this.saveState({ connections: [...this.state.connections, connection] });
   }
 }
