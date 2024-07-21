@@ -356,7 +356,7 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
       const user = this.admin?.getUser(target);
       if (!user) continue;
 
-      user.onAction({ ...data, ...connection, sender, action: "interaction" });
+      user.onAction({ ...data, ...connection, sender, action: "over" });
     }
   }
 

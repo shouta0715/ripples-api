@@ -9,6 +9,7 @@ import {
   DisplaynameMessage,
   InteractionMessage,
   ModeMessage,
+  OverMessage,
   PositionMessage,
   ResizeMessage,
   UploadedMessage,
@@ -99,6 +100,10 @@ export class UserSession
         break;
       case "disconnect":
         this.actionDisconnect(data);
+        break;
+
+      case "over":
+        this.actionOver(data);
         break;
       default:
         throw new BadRequestError("Unknown action");
@@ -207,5 +212,21 @@ export class UserSession
     );
 
     this.saveState({ connections });
+  }
+
+  private actionOver(data: OverMessage): void {
+    const { x, y, sender } = data;
+    const { assignPosition } = this.state;
+    const newX = x - assignPosition.startX + sender.assignPosition.startX;
+    const newY = y - assignPosition.startY + sender.assignPosition.startY;
+
+    this.ws.send(
+      json<OverMessage>({
+        ...data,
+        x: newX,
+        y: newY,
+        id: sender.id,
+      })
+    );
   }
 }
