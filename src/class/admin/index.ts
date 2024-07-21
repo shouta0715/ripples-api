@@ -155,7 +155,7 @@ export class AdminSession
 
     this.updateUser(user.ws, { ...user.getState(), ...device });
 
-    this.ws.send(json({ action: "device", ...user.getState() }));
+    this.ws.send(json({ action: "device", ...user.getState(), ...device }));
   }
 
   private actionDisplayname(data: AdminDisplaynameMessage) {
