@@ -11,7 +11,7 @@ export type AdminActions =
   | "displayname"
   | "position"
   | "uploaded"
-  | "connection";
+  | "connect";
 
 export type AdminState = {
   mode: Mode;
@@ -59,7 +59,7 @@ export interface AdminUploadedMessage extends BasicMessage<"uploaded"> {
   id: string;
 }
 
-export interface AdminConnectionMessage extends BasicMessage<"connection"> {
+export interface AdminConnectMessage extends BasicMessage<"connect"> {
   target: string;
   from: Direction;
   to: Direction;
@@ -76,4 +76,4 @@ export type AdminMessage =
   | AdminDisplaynameMessage
   | AdminPositionMessage
   | AdminUploadedMessage
-  | AdminConnectionMessage;
+  | AdminConnectMessage;

@@ -3,7 +3,7 @@ import { BadRequestError } from "@/errors";
 import { Session } from "@/models/sessions";
 import { AssignedPosition } from "@/types/position";
 import {
-  ConnectionMessage,
+  ConnectMessage,
   DeviceMessage,
   DisplaynameMessage,
   InteractionMessage,
@@ -93,8 +93,8 @@ export class UserSession
         this.actionUploaded(data);
         break;
 
-      case "connection":
-        this.actionConnection(data);
+      case "connect":
+        this.actionConnect(data);
         break;
 
       default:
@@ -184,7 +184,7 @@ export class UserSession
     this.ws.send(json({ action: "uploaded", id: data.id }));
   }
 
-  private actionConnection(data: ConnectionMessage): void {
+  private actionConnect(data: ConnectMessage): void {
     const { target, from, to, source } = data;
 
     const connection = { target, from, to, source };
