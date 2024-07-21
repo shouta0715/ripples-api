@@ -14,6 +14,7 @@ import {
   AdminDeviceMessage,
   AdminDisplaynameMessage,
   AdminPositionMessage,
+  AdminConnectMessage,
 } from "@/types/admin";
 import { UserState } from "@/types/users";
 import { json } from "@/utils";
@@ -91,6 +92,10 @@ export class AdminSession
 
       case "uploaded":
         this.actionUploaded(data);
+        break;
+
+      case "connect":
+        this.actionConnect(data);
         break;
       default:
         break;
@@ -196,5 +201,13 @@ export class AdminSession
         ...user,
       });
     }
+  }
+
+  private actionConnect(data: AdminConnectMessage) {
+    const { target, from, to, source, ws } = data;
+
+    const user = this.getUser(ws);
+
+    user.onAction({ action: "connect", target, from, to, source });
   }
 }

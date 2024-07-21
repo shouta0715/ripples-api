@@ -1,6 +1,13 @@
 import { BasicMessage, BasicState } from "@/models/sessions";
-import { Alignment, DeviceData, Mode } from "@/schema";
+import { Alignment, DeviceData, Direction, Mode } from "@/schema";
 import { AssignedPosition } from "@/types/position";
+
+type Connection = {
+  source: string;
+  target: string;
+  from: Direction;
+  to: Direction;
+};
 
 export type UserState = {
   width: number;
@@ -8,6 +15,7 @@ export type UserState = {
   displayname: string;
   assignPosition: AssignedPosition;
   alignment: Alignment;
+  connections: Connection[];
 } & BasicState;
 
 export type UserActions =
@@ -17,7 +25,8 @@ export type UserActions =
   | "device"
   | "displayname"
   | "position"
-  | "uploaded";
+  | "uploaded"
+  | "connect";
 
 export interface InteractionMessage extends BasicMessage<"interaction"> {
   sender: UserState;
@@ -54,6 +63,13 @@ export interface UploadedMessage extends BasicMessage<"uploaded"> {
   id: string;
 }
 
+export interface ConnectMessage extends BasicMessage<"connect"> {
+  target: string;
+  from: Direction;
+  to: Direction;
+  source: string;
+}
+
 export type UserMessage =
   | InteractionMessage
   | ResizeMessage
@@ -61,4 +77,5 @@ export type UserMessage =
   | DeviceMessage
   | DisplaynameMessage
   | PositionMessage
-  | UploadedMessage;
+  | UploadedMessage
+  | ConnectMessage;
