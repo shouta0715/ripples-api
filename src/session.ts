@@ -4,7 +4,13 @@ import { DurableObject } from "cloudflare:workers";
 import { AdminSession } from "@/class/admin";
 import { UserSession } from "@/class/users";
 import { BadRequestError, InternalServerError } from "@/errors";
-import { DeviceData, Mode, OverSchema, PositionSchema } from "@/schema";
+import {
+  Connection,
+  DeviceData,
+  Mode,
+  OverSchema,
+  PositionSchema,
+} from "@/schema";
 
 import { AdminMessage, AdminState } from "@/types/admin";
 
@@ -339,19 +345,24 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
     const sender = this.users.get(ws);
     if (!sender) throw new InternalServerError("Invalid sender");
 
-    for (const meta of this.users) {
-      const user = this.admin?.getUser(meta[0]);
+    const { connections } = sender;
+    if (connections.length === 0) return;
 
-      if (!user) throw new InternalServerError("User not found");
+    for (const connection of connections) {
+      if (connection.source !== data.id) continue;
+      if (connection.from !== data.direction) continue;
 
-      const isNextTo =
-        Math.abs(
-          sender.assignPosition.endX - user.state.assignPosition.startX
-        ) < 10;
+      const target = this.getUserWsById(connection.target);
+      const user = this.admin?.getUser(target);
+      if (!user) continue;
 
-      if (!isNextTo || sender.id === user.state.id) continue;
-      user.onAction({ ...data, sender, action: "interaction" });
+      user.onAction({ ...data, ...connection, sender, action: "interaction" });
     }
+  }
+
+  onConnect(id: string, data: Connection) {
+    const ws = this.getUserWsById(id);
+    this.admin?.onAction({ action: "connection", ...data, ws });
   }
 
   getUserState(id: string): UserState {
