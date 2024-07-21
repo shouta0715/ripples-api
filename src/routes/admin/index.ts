@@ -115,4 +115,18 @@ app.post("/:id/connect", zValidator("json", connectionSchema), async (c) => {
   return c.json({ success: true });
 });
 
+app.post("/:id/disconnect", zValidator("json", connectionSchema), async (c) => {
+  const appName = c.req.param("app-name");
+  const stub = getSessionStub(c, appName);
+
+  const connection = c.req.valid("json");
+
+  const userId = c.req.param("id");
+  if (userId !== connection.source) throw new BadRequestError("Invalid source");
+
+  await stub.onDisconnect(userId, connection);
+
+  return c.json({ success: true });
+});
+
 export { app };
