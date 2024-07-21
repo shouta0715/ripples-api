@@ -15,6 +15,7 @@ import {
   AdminDisplaynameMessage,
   AdminPositionMessage,
   AdminConnectMessage,
+  AdminDisconnectMessage,
 } from "@/types/admin";
 import { UserState } from "@/types/users";
 import { json } from "@/utils";
@@ -96,6 +97,10 @@ export class AdminSession
 
       case "connect":
         this.actionConnect(data);
+        break;
+
+      case "disconnect":
+        this.actionDisconnect(data);
         break;
       default:
         break;
@@ -209,5 +214,13 @@ export class AdminSession
     const user = this.getUser(ws);
 
     user.onAction({ action: "connect", target, from, to, source });
+  }
+
+  private actionDisconnect(data: AdminDisconnectMessage) {
+    const { target, from, to, source, ws } = data;
+
+    const user = this.getUser(ws);
+
+    user.onAction({ action: "disconnect", target, from, to, source });
   }
 }

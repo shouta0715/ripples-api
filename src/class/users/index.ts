@@ -5,6 +5,7 @@ import { AssignedPosition } from "@/types/position";
 import {
   ConnectMessage,
   DeviceMessage,
+  DisconnectMessage,
   DisplaynameMessage,
   InteractionMessage,
   ModeMessage,
@@ -96,7 +97,9 @@ export class UserSession
       case "connect":
         this.actionConnect(data);
         break;
-
+      case "disconnect":
+        this.actionDisconnect(data);
+        break;
       default:
         throw new BadRequestError("Unknown action");
     }
@@ -190,5 +193,19 @@ export class UserSession
     const connection = { target, from, to, source };
 
     this.saveState({ connections: [...this.state.connections, connection] });
+  }
+
+  private actionDisconnect(data: DisconnectMessage): void {
+    const { target, from, to, source } = data;
+
+    const connections = this.state.connections.filter(
+      (conn) =>
+        conn.target !== target ||
+        conn.from !== from ||
+        conn.to !== to ||
+        conn.source !== source
+    );
+
+    this.saveState({ connections });
   }
 }
