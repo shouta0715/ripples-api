@@ -1,9 +1,11 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { BadRequestError } from "@/errors";
 import { getSessionStub, sessionMiddleware } from "@/middleware";
 import {
   changeDeviceSchema,
+  connectionSchema,
   displaynameSchema,
   modeSchema,
   positionSchema,
@@ -95,6 +97,20 @@ app.post("/:id/device", zValidator("json", changeDeviceSchema), async (c) => {
   const device = c.req.valid("json");
 
   await stub.changeDevice(userId, device);
+
+  return c.json({ success: true });
+});
+
+app.post("/:id/connect", zValidator("json", connectionSchema), async (c) => {
+  const appName = c.req.param("app-name");
+  const stub = getSessionStub(c, appName);
+
+  const connection = c.req.valid("json");
+
+  const userId = c.req.param("id");
+  if (userId !== connection.source) throw new BadRequestError("Invalid source");
+
+  await stub.onConnect(userId, connection);
 
   return c.json({ success: true });
 });
