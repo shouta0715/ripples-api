@@ -27,13 +27,26 @@ export type UserActions =
   | "position"
   | "uploaded"
   | "connect"
-  | "disconnect";
+  | "disconnect"
+  | "over";
 
 export interface InteractionMessage extends BasicMessage<"interaction"> {
   sender: UserState;
   x: number;
   y: number;
   id: string;
+  [key: string]: unknown;
+}
+
+export interface OverMessage extends BasicMessage<"over"> {
+  sender: UserState;
+  x: number;
+  y: number;
+  id: string;
+  target: string;
+  from: Direction;
+  to: Direction;
+  source: string;
   [key: string]: unknown;
 }
 
@@ -87,4 +100,5 @@ export type UserMessage =
   | PositionMessage
   | UploadedMessage
   | ConnectMessage
-  | DisconnectMessage;
+  | DisconnectMessage
+  | OverMessage;
