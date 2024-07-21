@@ -16,6 +16,7 @@ export type UserState = {
   assignPosition: AssignedPosition;
   alignment: Alignment;
   connections: Connection[];
+  isStartDevice: boolean;
 } & BasicState;
 
 export type UserActions =
