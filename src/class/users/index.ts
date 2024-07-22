@@ -116,6 +116,10 @@ export class UserSession
       case "over":
         this.actionOver(data);
         break;
+
+      case "join":
+        this.onJoin();
+        break;
       default:
         throw new BadRequestError("Unknown action");
     }
@@ -275,6 +279,15 @@ export class UserSession
         x: newX,
         y: newY,
         id: sender.id,
+      })
+    );
+  }
+
+  private onJoin(): void {
+    this.ws.send(
+      json({
+        action: "join",
+        state: this.state,
       })
     );
   }

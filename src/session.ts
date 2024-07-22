@@ -136,6 +136,7 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
     this.state.acceptWebSocket(ws, [user.role, user.id]);
 
     this.admin.onAction({ action: "join", user: user.getState(), ws });
+    user.onAction({ action: "join" });
   }
 
   private handleAdmin(ws: WebSocket): AdminState {

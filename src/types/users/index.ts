@@ -29,7 +29,8 @@ export type UserActions =
   | "uploaded"
   | "connect"
   | "disconnect"
-  | "over";
+  | "over"
+  | "join";
 
 export interface InteractionMessage extends BasicMessage<"interaction"> {
   sender: UserState;
@@ -91,6 +92,8 @@ export interface DisconnectMessage extends BasicMessage<"disconnect"> {
   source: string;
 }
 
+export interface JoinMessage extends BasicMessage<"join"> {}
+
 export type UserMessage =
   | InteractionMessage
   | ResizeMessage
@@ -101,4 +104,5 @@ export type UserMessage =
   | UploadedMessage
   | ConnectMessage
   | DisconnectMessage
-  | OverMessage;
+  | OverMessage
+  | JoinMessage;
