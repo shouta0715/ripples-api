@@ -362,13 +362,16 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
   }
 
   onConnect(id: string, data: Connection) {
-    const ws = this.getUserWsById(id);
-    this.admin?.onAction({ action: "connect", ...data, ws });
+    const sourceWs = this.getUserWsById(id);
+    const targetWs = this.getUserWsById(data.target);
+    this.admin?.onAction({ action: "connect", ...data, sourceWs, targetWs });
   }
 
   onDisconnect(id: string, data: Connection) {
-    const ws = this.getUserWsById(id);
-    this.admin?.onAction({ action: "disconnect", ...data, ws });
+    const sourceWs = this.getUserWsById(id);
+    const targetWs = this.getUserWsById(data.target);
+
+    this.admin?.onAction({ action: "disconnect", ...data, sourceWs, targetWs });
   }
 
   getUserState(id: string): UserState {
