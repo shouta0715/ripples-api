@@ -62,3 +62,46 @@ export type PositionSchema = z.infer<typeof positionSchema>;
 export type OverSchema = z.infer<typeof overSchema>;
 export type Direction = z.infer<typeof direction>;
 export type Connection = z.infer<typeof connectionSchema>;
+
+// キースキーマ
+const keySchema = z
+  .string()
+  .min(1, "1文字以上の文字列を入力してください。")
+  .max(30, "30文字以下の文字列を入力してください。")
+  .regex(/^[a-zA-Z0-9_]+$/, "英数字とアンダースコアのみ使用できます。");
+
+// ラベルスキーマ
+const labelSchema = z
+  .string()
+  .min(1, "1文字以上の文字列を入力してください。")
+  .max(30, "30文字以下の文字列を入力してください。");
+
+// カスタムスキーマ
+const customSchema = z.union([
+  z.object({
+    type: z.literal("string"),
+    defaultValue: z.string().default("初期値の文字列を入力してください。"),
+    key: keySchema,
+    label: labelSchema,
+  }),
+  z.object({
+    type: z.literal("number"),
+    defaultValue: z.number().default(0),
+    key: keySchema,
+    label: labelSchema,
+  }),
+  z.object({
+    type: z.literal("boolean"),
+    defaultValue: z.boolean().default(false),
+    key: keySchema,
+    label: labelSchema,
+  }),
+]);
+
+// カスタム入力のタイプ定義
+type CustomInput = z.infer<typeof customSchema>;
+const customsSchema = z.array(customSchema);
+
+type CustomsInput = z.infer<typeof customsSchema>;
+
+export { customSchema, CustomInput, CustomsInput };
