@@ -10,12 +10,13 @@ export const direction = z.union([
 export const alignment = z.object({
   isLeft: z.boolean(),
   isRight: z.boolean(),
+  isTop: z.boolean(),
+  isBottom: z.boolean(),
 });
 
 export const positionSchema = z.object({
   x: z.number(),
   y: z.number(),
-  alignment,
 });
 
 export const windowSchema = z.object({

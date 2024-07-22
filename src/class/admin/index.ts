@@ -170,11 +170,10 @@ export class AdminSession
   }
 
   private actionPosition(data: AdminPositionMessage) {
-    const { x, y, ws, alignment } = data;
-
+    const { x, y, ws } = data;
     const user = this.getUser(ws);
 
-    user.onAction({ action: "position", x, y, ws, alignment });
+    user.onAction({ action: "position", x, y, ws });
 
     this.updateUser(user.ws, user.getState());
 
@@ -209,18 +208,44 @@ export class AdminSession
   }
 
   private actionConnect(data: AdminConnectMessage) {
-    const { target, from, to, source, ws } = data;
+    const { target, from, to, source, targetWs, sourceWs } = data;
 
-    const user = this.getUser(ws);
+    const targetUser = this.getUser(targetWs);
+    const sourceUser = this.getUser(sourceWs);
 
-    user.onAction({ action: "connect", target, from, to, source });
+    targetUser.onAction({
+      action: "connect",
+      target,
+      from,
+      to,
+      source,
+    });
+    sourceUser.onAction({ action: "connect", target, from, to, source });
+
+    this.ws.send(
+      json({
+        action: "connection",
+        target: targetUser.getState(),
+        source: sourceUser.getState(),
+      })
+    );
   }
 
   private actionDisconnect(data: AdminDisconnectMessage) {
-    const { target, from, to, source, ws } = data;
+    const { target, from, to, source, sourceWs, targetWs } = data;
 
-    const user = this.getUser(ws);
+    const targetUser = this.getUser(targetWs);
+    const sourceUser = this.getUser(sourceWs);
 
-    user.onAction({ action: "disconnect", target, from, to, source });
+    targetUser.onAction({ action: "disconnect", target, from, to, source });
+    sourceUser.onAction({ action: "disconnect", target, from, to, source });
+
+    this.ws.send(
+      json({
+        action: "connection",
+        target: targetUser.getState(),
+        source: sourceUser.getState(),
+      })
+    );
   }
 }

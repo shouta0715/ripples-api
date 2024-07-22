@@ -17,7 +17,12 @@ import {
   UserMessage,
   UserState,
 } from "@/types/users";
-import { checkUUID, getRandomInitialPosition, json } from "@/utils";
+import {
+  checkUUID,
+  getNewAlignment,
+  getRandomInitialPosition,
+  json,
+} from "@/utils";
 
 export class UserSession
   extends BasicSession<UserState, UserActions, UserMessage>
@@ -61,7 +66,12 @@ export class UserSession
       displayname: id,
       id,
       role: "user",
-      alignment: { isLeft: false, isRight: false },
+      alignment: {
+        isLeft: true,
+        isRight: true,
+        isBottom: true,
+        isTop: true,
+      },
       connections: [],
       isStartDevice: false,
     };
@@ -105,6 +115,10 @@ export class UserSession
 
       case "over":
         this.actionOver(data);
+        break;
+
+      case "join":
+        this.onJoin();
         break;
       default:
         throw new BadRequestError("Unknown action");
@@ -174,7 +188,7 @@ export class UserSession
   }
 
   private actionPosition(data: PositionMessage): void {
-    const { x, y, alignment } = data;
+    const { x, y } = data;
     const { width, height } = this.state;
 
     const newPosition: AssignedPosition = {
@@ -184,9 +198,15 @@ export class UserSession
       endY: y + height,
     };
 
-    this.saveState({ assignPosition: newPosition, alignment });
+    this.saveState({ assignPosition: newPosition });
 
-    this.ws.send(json({ ...data, action: "position" }));
+    this.ws.send(
+      json({
+        ...this.state,
+        ...data,
+        action: "position",
+      })
+    );
   }
 
   private actionUploaded(data: UploadedMessage): void {
@@ -196,13 +216,45 @@ export class UserSession
   private actionConnect(data: ConnectMessage): void {
     const { target, from, to, source } = data;
 
+    const isSource = this.state.id === source;
+    const { alignment } = this.state;
+
+    if (!isSource) {
+      const newAlignment = getNewAlignment(alignment, "connect", to);
+
+      this.saveState({ alignment: newAlignment });
+
+      this.ws.send(json({ alignment: newAlignment, action: "connection" }));
+
+      return;
+    }
+
     const connection = { target, from, to, source };
 
-    this.saveState({ connections: [...this.state.connections, connection] });
+    const newAlignment = getNewAlignment(alignment, "connect", from);
+
+    this.saveState({
+      connections: [...this.state.connections, connection],
+      alignment: newAlignment,
+    });
+
+    this.ws.send(json({ alignment: newAlignment, action: "connection" }));
   }
 
   private actionDisconnect(data: DisconnectMessage): void {
     const { target, from, to, source } = data;
+
+    const isSource = this.state.id === source;
+
+    if (!isSource) {
+      const { alignment } = this.state;
+      const newAlignment = getNewAlignment(alignment, "disconnect", to);
+
+      this.saveState({ alignment: newAlignment });
+      this.ws.send(json({ alignment: newAlignment, action: "connection" }));
+
+      return;
+    }
 
     const connections = this.state.connections.filter(
       (conn) =>
@@ -212,7 +264,13 @@ export class UserSession
         conn.source !== source
     );
 
-    this.saveState({ connections });
+    const { alignment } = this.state;
+
+    const newAlignment = getNewAlignment(alignment, "disconnect", from);
+
+    this.saveState({ connections, alignment: newAlignment });
+
+    this.ws.send(json({ alignment: newAlignment, action: "connection" }));
   }
 
   private actionOver(data: OverMessage): void {
@@ -227,6 +285,15 @@ export class UserSession
         x: newX,
         y: newY,
         id: sender.id,
+      })
+    );
+  }
+
+  private onJoin(): void {
+    this.ws.send(
+      json({
+        action: "join",
+        state: this.state,
       })
     );
   }
