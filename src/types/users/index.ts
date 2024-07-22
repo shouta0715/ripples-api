@@ -1,5 +1,5 @@
 import { BasicMessage, BasicState } from "@/models/sessions";
-import { Alignment, DeviceData, Direction, Mode } from "@/schema";
+import { Alignment, CustomsInput, DeviceData, Direction, Mode } from "@/schema";
 import { AssignedPosition } from "@/types/position";
 
 type Connection = {
@@ -17,6 +17,7 @@ export type UserState = {
   alignment: Alignment;
   connections: Connection[];
   isStartDevice: boolean;
+  customs: CustomsInput;
 } & BasicState;
 
 export type UserActions =
