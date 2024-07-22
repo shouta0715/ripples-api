@@ -1,5 +1,5 @@
 import { BasicMessage, BasicState } from "@/models/sessions";
-import { Alignment, DeviceData, Direction, Mode } from "@/schema";
+import { DeviceData, Direction, Mode } from "@/schema";
 import { InteractionMessage, UserState } from "@/types/users";
 
 export type AdminActions =
@@ -51,7 +51,6 @@ export interface AdminDisplaynameMessage extends BasicMessage<"displayname"> {
 export interface AdminPositionMessage extends BasicMessage<"position"> {
   x: number;
   y: number;
-  alignment: Alignment;
   id: string;
   ws: WebSocket;
 }
@@ -65,15 +64,17 @@ export interface AdminConnectMessage extends BasicMessage<"connect"> {
   from: Direction;
   to: Direction;
   source: string;
-  ws: WebSocket;
+  sourceWs: WebSocket;
+  targetWs: WebSocket;
 }
 
 export interface AdminDisconnectMessage extends BasicMessage<"disconnect"> {
   target: string;
-  ws: WebSocket;
   from: Direction;
   to: Direction;
   source: string;
+  sourceWs: WebSocket;
+  targetWs: WebSocket;
 }
 
 export type AdminMessage =

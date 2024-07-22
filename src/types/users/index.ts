@@ -71,7 +71,6 @@ export interface DisplaynameMessage extends BasicMessage<"displayname"> {
 export interface PositionMessage extends BasicMessage<"position"> {
   x: number;
   y: number;
-  alignment: Alignment;
 }
 
 export interface UploadedMessage extends BasicMessage<"uploaded"> {
