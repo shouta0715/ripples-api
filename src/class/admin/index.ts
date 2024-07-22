@@ -221,6 +221,14 @@ export class AdminSession
       source,
     });
     sourceUser.onAction({ action: "connect", target, from, to, source });
+
+    this.ws.send(
+      json({
+        action: "connection",
+        target: targetUser.getState(),
+        source: sourceUser.getState(),
+      })
+    );
   }
 
   private actionDisconnect(data: AdminDisconnectMessage) {
@@ -231,5 +239,13 @@ export class AdminSession
 
     targetUser.onAction({ action: "disconnect", target, from, to, source });
     sourceUser.onAction({ action: "disconnect", target, from, to, source });
+
+    this.ws.send(
+      json({
+        action: "connection",
+        target: targetUser.getState(),
+        source: sourceUser.getState(),
+      })
+    );
   }
 }
