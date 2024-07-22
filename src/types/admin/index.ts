@@ -1,5 +1,5 @@
 import { BasicMessage, BasicState } from "@/models/sessions";
-import { CustomsInput, DeviceData, Direction, Mode } from "@/schema";
+import { CustomInput, DeviceData, Direction, Mode } from "@/schema";
 import { InteractionMessage, UserState } from "@/types/users";
 
 export type AdminActions =
@@ -16,7 +16,7 @@ export type AdminActions =
 
 export type AdminState = {
   mode: Mode;
-  customs: CustomsInput;
+  customs: CustomInput[];
 } & BasicState;
 
 export interface AdminModeMessage extends BasicMessage<"mode"> {

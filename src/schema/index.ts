@@ -100,8 +100,5 @@ const customSchema = z.union([
 
 // カスタム入力のタイプ定義
 type CustomInput = z.infer<typeof customSchema>;
-const customsSchema = z.array(customSchema);
 
-type CustomsInput = z.infer<typeof customsSchema>;
-
-export { customSchema, CustomInput, CustomsInput };
+export { customSchema, CustomInput };
