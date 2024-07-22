@@ -200,7 +200,13 @@ export class UserSession
 
     this.saveState({ assignPosition: newPosition });
 
-    this.ws.send(json({ ...data, action: "position" }));
+    this.ws.send(
+      json({
+        ...this.state,
+        ...data,
+        action: "position",
+      })
+    );
   }
 
   private actionUploaded(data: UploadedMessage): void {
