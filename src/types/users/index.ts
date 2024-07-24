@@ -1,5 +1,12 @@
 import { BasicMessage, BasicState } from "@/models/sessions";
-import { Alignment, CustomInput, DeviceData, Direction, Mode } from "@/schema";
+import {
+  Alignment,
+  CustomInput,
+  DeviceData,
+  Direction,
+  Mode,
+  UserCustomInput,
+} from "@/schema";
 import { AssignedPosition } from "@/types/position";
 
 type Connection = {
@@ -17,7 +24,7 @@ export type UserState = {
   alignment: Alignment;
   connections: Connection[];
   isStartDevice: boolean;
-  customs: CustomInput[];
+  custom: UserCustomInput;
 } & BasicState;
 
 export type UserActions =
@@ -31,7 +38,8 @@ export type UserActions =
   | "connect"
   | "disconnect"
   | "over"
-  | "join";
+  | "join"
+  | "customs";
 
 export interface InteractionMessage extends BasicMessage<"interaction"> {
   sender: UserState;
@@ -95,6 +103,12 @@ export interface DisconnectMessage extends BasicMessage<"disconnect"> {
 
 export interface JoinMessage extends BasicMessage<"join"> {}
 
+export interface CustomsMessage extends BasicMessage<"customs"> {
+  custom: CustomInput;
+  trigger: "add" | "remove";
+  key: string;
+}
+
 export type UserMessage =
   | InteractionMessage
   | ResizeMessage
@@ -106,4 +120,5 @@ export type UserMessage =
   | ConnectMessage
   | DisconnectMessage
   | OverMessage
-  | JoinMessage;
+  | JoinMessage
+  | CustomsMessage;

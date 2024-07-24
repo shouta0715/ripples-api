@@ -28,12 +28,54 @@ export const displaynameSchema = z.object({
   displayname: z.string(),
 });
 
+const keySchema = z
+  .string()
+  .min(1, "1文字以上の文字列を入力してください。")
+  .max(30, "30文字以下の文字列を入力してください。")
+  .regex(/^[a-zA-Z0-9_]+$/, "英数字とアンダースコアのみ使用できます。");
+
+const labelSchema = z
+  .string()
+  .min(1, "1文字以上の文字列を入力してください。")
+  .max(30, "30文字以下の文字列を入力してください。");
+
+const stringSchema = z.object({
+  type: z.literal("string"),
+  defaultValue: z.string().default("初期値の文字列を入力してください。"),
+  key: keySchema,
+  label: labelSchema,
+});
+
+const numberSchema = z.object({
+  type: z.literal("number"),
+  defaultValue: z.number().default(0),
+  key: keySchema,
+  label: labelSchema,
+});
+
+const booleanSchema = z.object({
+  type: z.literal("boolean"),
+  defaultValue: z.boolean().default(false),
+  key: keySchema,
+  label: labelSchema,
+});
+
+const customSchema = z.union([stringSchema, numberSchema, booleanSchema]);
+
+const userCustomSchema = z.record(
+  z.union([z.number(), z.string(), z.boolean()])
+);
+
+type CustomInput = z.infer<typeof customSchema>;
+type UserCustomInput = z.infer<typeof userCustomSchema>;
+
 export const changeDeviceSchema = z.object({
   x: z.number(),
   y: z.number(),
   width: z.number(),
   height: z.number(),
   isStartDevice: z.boolean(),
+  custom: userCustomSchema,
 });
 
 export const modeSchema = z.object({
@@ -63,42 +105,4 @@ export type OverSchema = z.infer<typeof overSchema>;
 export type Direction = z.infer<typeof direction>;
 export type Connection = z.infer<typeof connectionSchema>;
 
-// キースキーマ
-const keySchema = z
-  .string()
-  .min(1, "1文字以上の文字列を入力してください。")
-  .max(30, "30文字以下の文字列を入力してください。")
-  .regex(/^[a-zA-Z0-9_]+$/, "英数字とアンダースコアのみ使用できます。");
-
-// ラベルスキーマ
-const labelSchema = z
-  .string()
-  .min(1, "1文字以上の文字列を入力してください。")
-  .max(30, "30文字以下の文字列を入力してください。");
-
-// カスタムスキーマ
-const customSchema = z.union([
-  z.object({
-    type: z.literal("string"),
-    defaultValue: z.string().default("初期値の文字列を入力してください。"),
-    key: keySchema,
-    label: labelSchema,
-  }),
-  z.object({
-    type: z.literal("number"),
-    defaultValue: z.number().default(0),
-    key: keySchema,
-    label: labelSchema,
-  }),
-  z.object({
-    type: z.literal("boolean"),
-    defaultValue: z.boolean().default(false),
-    key: keySchema,
-    label: labelSchema,
-  }),
-]);
-
-// カスタム入力のタイプ定義
-type CustomInput = z.infer<typeof customSchema>;
-
-export { customSchema, CustomInput };
+export { customSchema, CustomInput, userCustomSchema, UserCustomInput };
