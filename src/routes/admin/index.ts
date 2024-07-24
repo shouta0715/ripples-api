@@ -6,6 +6,7 @@ import { getSessionStub, sessionMiddleware } from "@/middleware";
 import {
   changeDeviceSchema,
   connectionSchema,
+  customSchema,
   displaynameSchema,
   modeSchema,
   positionSchema,
@@ -13,6 +14,28 @@ import {
 import { SyncEnv } from "@/types/env";
 
 const app = new Hono<SyncEnv>().basePath("/:app-name/admin");
+
+app.use(
+  "/customs",
+  cors({
+    origin: "*",
+    allowMethods: ["POST"],
+    exposeHeaders: ["Content-Length"],
+    allowHeaders: ["Content-Type"],
+    credentials: true,
+  })
+);
+
+app.use(
+  "/customs/:key",
+  cors({
+    origin: "*",
+    allowMethods: ["DELETE", "PATCH"],
+    exposeHeaders: ["Content-Length"],
+    allowHeaders: ["Content-Type"],
+    credentials: true,
+  })
+);
 
 app.use(
   "/:id/*",
@@ -47,6 +70,49 @@ app.post("mode", zValidator("json", modeSchema), async (c) => {
   const stub = getSessionStub(c, appName);
 
   await stub.setMode(mode);
+
+  return c.json({ success: true });
+});
+
+app.get("/customs", async (c) => {
+  const appName = c.req.param("app-name");
+  const stub = getSessionStub(c, appName);
+
+  const customs = await stub.getCustoms();
+
+  return c.json(customs);
+});
+
+app.post("/customs", zValidator("json", customSchema), async (c) => {
+  const appName = c.req.param("app-name");
+  const stub = getSessionStub(c, appName);
+
+  const customs = c.req.valid("json");
+
+  await stub.setCustom(customs);
+
+  return c.json({ success: true });
+});
+
+app.delete("/customs/:key", async (c) => {
+  const appName = c.req.param("app-name");
+  const stub = getSessionStub(c, appName);
+
+  const key = c.req.param("key");
+
+  await stub.deleteCustom(key);
+
+  return c.json({ success: true });
+});
+
+app.patch("/customs/:key", zValidator("json", customSchema), async (c) => {
+  const appName = c.req.param("app-name");
+  const stub = getSessionStub(c, appName);
+
+  const key = c.req.param("key");
+  const custom = c.req.valid("json");
+
+  await stub.updateCustom(key, custom);
 
   return c.json({ success: true });
 });
