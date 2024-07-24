@@ -191,7 +191,13 @@ export class AdminSession
       throw new BadRequestError("Invalid user");
     }
 
-    return new UserSession(ws, user, undefined, this.updateUser.bind(this));
+    return new UserSession(
+      ws,
+      user,
+      undefined,
+      undefined,
+      this.updateUser.bind(this)
+    );
   }
 
   private saveUsersState() {

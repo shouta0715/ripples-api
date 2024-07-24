@@ -6,10 +6,12 @@ import { UserSession } from "@/class/users";
 import { BadRequestError, InternalServerError } from "@/errors";
 import {
   Connection,
+  CustomInput,
   DeviceData,
   Mode,
   OverSchema,
   PositionSchema,
+  UserCustomInput,
 } from "@/schema";
 
 import { AdminMessage, AdminState } from "@/types/admin";
@@ -23,6 +25,8 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
   users = new Map<WebSocket, UserState>();
 
   images: string[] = [];
+
+  customs: CustomInput[] = [];
 
   // 管理者の情報を保持する
   admin: AdminSession | null;
@@ -49,6 +53,12 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
 
     this.state.getWebSockets("admin").forEach((ws) => {
       this.admin = new AdminSession(ws, this.updatedAdminUsers, this.users);
+    });
+
+    this.storage.get<CustomInput[]>("customs").then((data) => {
+      if (!data) return;
+
+      this.customs = data;
     });
   }
 
@@ -151,8 +161,20 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
     return admin.state;
   }
 
+  private getInitialCustom(): UserCustomInput {
+    const custom: UserCustomInput = {};
+
+    this.customs.forEach((c) => {
+      custom[c.key] = c.defaultValue;
+    });
+
+    return custom;
+  }
+
   private handleUser(ws: WebSocket, url: URL): UserSession {
-    const user = new UserSession(ws, undefined, url, this.updatedUsers);
+    const prevUser = this.users.get(ws);
+    const custom = this.getInitialCustom();
+    const user = new UserSession(ws, prevUser, url, custom, this.updatedUsers);
 
     return user;
   }
@@ -383,5 +405,70 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
     if (!user) throw new BadRequestError("Invalid user");
 
     return user.getState();
+  }
+
+  /** ****************************
+   Custom 関連
+  ****************************** */
+
+  async setCustom(data: CustomInput) {
+    const { key } = data;
+
+    const isAlreadyExist = this.customs.some((custom) => custom.key === key);
+
+    if (isAlreadyExist) return;
+
+    this.customs.push(data);
+
+    await this.storage.put("customs", this.customs);
+
+    for (const meta of this.users) {
+      const user = this.admin?.getUser(meta[0]);
+      if (!user) throw new InternalServerError("User not found");
+
+      user.onAction({ action: "customs", custom: data, trigger: "add", key });
+    }
+  }
+
+  deleteCustom(key: string) {
+    let custom: CustomInput | undefined;
+    this.customs = this.customs.filter((c) => {
+      if (c.key !== key) return true;
+
+      custom = c;
+
+      return false;
+    });
+
+    this.storage.put("customs", this.customs);
+    if (!custom) return;
+
+    for (const meta of this.users) {
+      const user = this.admin?.getUser(meta[0]);
+      if (!user) throw new InternalServerError("User not found");
+
+      user.onAction({
+        action: "customs",
+        custom,
+        trigger: "remove",
+        key,
+      });
+    }
+  }
+
+  updateCustom(key: string, data: CustomInput) {
+    this.customs = this.customs.map((custom) => {
+      if (custom.key === key) {
+        return data;
+      }
+
+      return custom;
+    });
+
+    this.storage.put("customs", this.customs);
+  }
+
+  async getCustoms(): Promise<CustomInput[]> {
+    return this.customs;
   }
 }

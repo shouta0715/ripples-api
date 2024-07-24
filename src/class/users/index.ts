@@ -1,9 +1,11 @@
 import { BasicSession } from "@/class/common";
 import { BadRequestError } from "@/errors";
 import { Session } from "@/models/sessions";
+import { CustomInput, UserCustomInput } from "@/schema";
 import { AssignedPosition } from "@/types/position";
 import {
   ConnectMessage,
+  CustomsMessage,
   DeviceMessage,
   DisconnectMessage,
   DisplaynameMessage,
@@ -32,15 +34,16 @@ export class UserSession
     ws: WebSocket,
     initialState?: UserState,
     url?: URL,
+    custom?: UserCustomInput,
     cb?: (ws: WebSocket, state: UserState) => void
   ) {
     super(ws, "user");
-    this.state = initialState || this.onConnect(url);
+    this.state = initialState || this.onConnect(url, custom);
     this.id = this.state.id;
     if (cb) this.addListener(cb);
   }
 
-  onConnect(url?: URL): UserState {
+  onConnect(url?: URL, custom?: UserCustomInput): UserState {
     const id = url?.pathname.split("/").pop();
 
     if (checkUUID(id) === false || !id) throw new BadRequestError("Invalid ID");
@@ -74,6 +77,7 @@ export class UserSession
       },
       connections: [],
       isStartDevice: false,
+      custom: custom || {},
     };
 
     this.saveState(state);
@@ -119,6 +123,10 @@ export class UserSession
 
       case "join":
         this.onJoin();
+        break;
+
+      case "customs":
+        this.actionCustoms(data);
         break;
       default:
         throw new BadRequestError("Unknown action");
@@ -179,6 +187,8 @@ export class UserSession
     const state = { ...this.state, assignPosition: newPosition, ...device };
 
     this.saveState(state);
+
+    this.ws.send(json({ action: "device", ...state }));
   }
 
   private actionDisplayname(data: DisplaynameMessage): void {
@@ -296,5 +306,54 @@ export class UserSession
         state: this.state,
       })
     );
+  }
+
+  private actionCustoms(data: CustomsMessage): void {
+    const { custom, trigger, key } = data;
+
+    switch (trigger) {
+      case "add":
+        this.addCustom(custom);
+        break;
+
+      case "remove":
+        this.removeCustom(key);
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  private addCustom(custom: CustomInput): void {
+    const newCustom: UserCustomInput = {
+      [custom.key]: custom.defaultValue,
+    };
+
+    this.saveState({ custom: { ...this.state.custom, ...newCustom } });
+
+    const device = {
+      ...this.state,
+      x: this.state.assignPosition.startX,
+      y: this.state.assignPosition.startY,
+      custom: { ...this.state.custom, ...newCustom },
+    };
+
+    this.actionDevice({ action: "device", device });
+  }
+
+  private removeCustom(key: string): void {
+    const { [key]: _, ...newCustom } = this.state.custom;
+
+    this.saveState({ custom: newCustom });
+
+    const device = {
+      ...this.state,
+      x: this.state.assignPosition.startX,
+      y: this.state.assignPosition.startY,
+      custom: newCustom,
+    };
+
+    this.actionDevice({ action: "device", device });
   }
 }
