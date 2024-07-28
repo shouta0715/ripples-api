@@ -92,6 +92,7 @@ export interface ConnectMessage extends BasicMessage<"connect"> {
   from: Direction;
   to: Direction;
   source: string;
+  sourceState: UserState;
 }
 
 export interface DisconnectMessage extends BasicMessage<"disconnect"> {
@@ -99,6 +100,7 @@ export interface DisconnectMessage extends BasicMessage<"disconnect"> {
   from: Direction;
   to: Direction;
   source: string;
+  sourceState: UserState;
 }
 
 export interface JoinMessage extends BasicMessage<"join"> {}

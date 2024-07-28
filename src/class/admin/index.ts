@@ -225,8 +225,16 @@ export class AdminSession
       from,
       to,
       source,
+      sourceState: sourceUser.getState(),
     });
-    sourceUser.onAction({ action: "connect", target, from, to, source });
+    sourceUser.onAction({
+      action: "connect",
+      target,
+      from,
+      to,
+      source,
+      sourceState: sourceUser.getState(),
+    });
 
     this.ws.send(
       json({
@@ -243,8 +251,22 @@ export class AdminSession
     const targetUser = this.getUser(targetWs);
     const sourceUser = this.getUser(sourceWs);
 
-    targetUser.onAction({ action: "disconnect", target, from, to, source });
-    sourceUser.onAction({ action: "disconnect", target, from, to, source });
+    targetUser.onAction({
+      action: "disconnect",
+      target,
+      from,
+      to,
+      source,
+      sourceState: sourceUser.getState(),
+    });
+    sourceUser.onAction({
+      action: "disconnect",
+      target,
+      from,
+      to,
+      source,
+      sourceState: sourceUser.getState(),
+    });
 
     this.ws.send(
       json({
