@@ -95,6 +95,11 @@ export class WebMultiViewSession extends DurableObject<SyncEnv["Bindings"]> {
       return;
     }
 
+    if (m === "ping") {
+      ws.send("pong");
+
+      return;
+    }
     const data = parse<InteractionMessage>(m);
 
     this.broadcastUser(ws, data);

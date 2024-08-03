@@ -165,6 +165,8 @@ export class UserSession
     };
 
     this.saveState({ width, height, assignPosition: newPosition });
+
+    this.ws.send(json({ action: "resize", ...this.state }));
   }
 
   private actionMode(data: ModeMessage): void {

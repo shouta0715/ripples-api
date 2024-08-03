@@ -41,6 +41,9 @@ export type UserActions =
   | "join"
   | "customs";
 
+export interface HeartbeatMessage extends BasicMessage<"heartbeat"> {
+  type: "ping";
+}
 export interface InteractionMessage extends BasicMessage<"interaction"> {
   sender: UserState;
   x: number;
